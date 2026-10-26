@@ -13,7 +13,8 @@ def elbow_index(sorted_desc: np.ndarray) -> int:
 
 
 def elbow_hits(values: np.ndarray) -> np.ndarray:
-    order = np.argsort(-values, kind="stable")
+    positive = np.flatnonzero(values > 0)
+    order = positive[np.argsort(-values[positive], kind="stable")]
     return order[: elbow_index(values[order]) + 1]
 
 

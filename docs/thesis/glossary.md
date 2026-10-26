@@ -36,13 +36,13 @@ Definitions for the terms used in [in_tfm_neuron_clustering.md](in_tfm_neuron_cl
 
 **Activation.** The neuron's value on one input at one position.
 
-**Hit.** An input position kept for analysis because the neuron fires strongly there. For mixed4e:55 that is 14,240 image positions. For a Gemma dimension it is a token whose value in that column is past the elbow.
+**Hit.** An input position kept for analysis because the neuron fires strongly there. For mixed4e:55 that is 14,240 image positions, past the elbow of the positive activations. For a Gemma dimension it is a token whose value in that column is past the elbow.
 
 **Elbow (Kneedle).** On a curve sorted from high to low, the point furthest (perpendicular distance) from the straight line joining the first and last values. Everything before it is kept. Used both to pick hits and to pick forest roots.
 
 **Bucketed selection.** The other way to pick hits: split the activation range into equal-width bands, merge small bands, and give each band an equal share of the hit budget so that rare high activations are not outnumbered.
 
-**Attribution.** How much an upstream channel's value contributed to the neuron's activation, here a gradient-based score per channel.
+**Attribution.** The per-channel factor multiplied by the input in a hit vector. For mixed4e:55 it is the 1x1 conv weight, which for a linear unit equals the gradient.
 
 **Hadamard product.** Elementwise multiplication of two vectors of the same length: `(a ⊙ b)_i = a_i * b_i`. Here it is activation times attribution for each upstream channel.
 

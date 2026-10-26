@@ -1,32 +1,19 @@
 import networkx as nx
 import numpy as np
 
-from neural_interp.buckets import Bucket
+from neural_interp.buckets import Bucket, ranked_sample
 
 
-def spread_sample(dist: np.ndarray, members: np.ndarray, n: int, seed: int = 0) -> np.ndarray:
-    if len(members) <= n:
-        return members
-    rng = np.random.default_rng(seed)
-    chosen = [int(rng.choice(members))]
-    gap = dist[chosen[0], members].copy()
-    while len(chosen) < n:
-        nxt = int(members[np.argmax(gap)])
-        chosen.append(nxt)
-        gap = np.minimum(gap, dist[nxt, members])
-    return np.array(chosen)
-
-
-def map_nodes(dist: np.ndarray, buckets: list[Bucket], peak_nodes: np.ndarray, per_bucket: int = 40) -> np.ndarray:
-    picked = [spread_sample(dist, b.hits, per_bucket) for b in buckets]
-    return np.unique(np.concatenate(picked + [peak_nodes]))
+def map_nodes(buckets: list[Bucket], probs: np.ndarray, root_hits: np.ndarray, per_bucket: int = 8) -> np.ndarray:
+    picked = [ranked_sample(b, probs, per_bucket) for b in buckets]
+    return np.unique(np.concatenate(picked + [root_hits]))
 
 
 def hit_map(
     dist: np.ndarray,
     probs: np.ndarray,
     nodes: np.ndarray,
-    peak_nodes: np.ndarray,
+    root_hits: np.ndarray,
     ks=(6, 10, 15, 25),
     pull_min: float = 0.1,
     pull_weight: float = 3.0,
@@ -45,7 +32,7 @@ def hit_map(
             break
     for node in nodes:
         for c, p in enumerate(probs[node]):
-            peak = int(peak_nodes[c])
+            peak = int(root_hits[c])
             if p >= pull_min and peak != node:
                 g.add_edge(int(node), peak, weight=pull_weight * float(p))
-    return nx.spring_layout(g, weight="weight", seed=seed)
+    return nx.spring_layout(g, weight="weight", iterations=300, seed=seed)

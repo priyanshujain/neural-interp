@@ -12,7 +12,7 @@ One weight row in a dot product. In InceptionV1, a layer outputs a stack of 2D f
 
 A hit is an input on which the neuron is strongly active. Most activations are weak and say little about what the neuron is for, so only the strongest are kept.
 
-**Elbow cut.** Sort all activations from high to low. The curve drops steeply, then flattens into a long tail. The elbow is found with the Kneedle rule: draw a straight line from the first point to the last, and take the point furthest from it (perpendicular distance). Everything before it is a hit. It is automatic, so the cut is not tuned per neuron.
+**Elbow cut.** Sort the positive activations from high to low. The curve drops steeply, then flattens into a long tail. The elbow is found with the Kneedle rule: draw a straight line from the first point to the last, and take the point furthest from it (perpendicular distance). Everything before it is a hit. It is automatic, so the cut is not tuned per neuron. Only the positive side is used even when the unit is read pre-ReLU: the negative tail would otherwise pull the line and move the elbow.
 
 **Bucketed selection.** The alternative. Split the activation range between a floor and the maximum into equal-width bands, merge bands with too few activations into a neighbour, and give each band an equal share of the hit budget. The elbow is dominated by the many moderate activations, since high ones are rare; bucketing guarantees the top is represented.
 
@@ -26,7 +26,7 @@ Neither activation nor weight alone measures contribution. A channel can be stro
 
 Two hits with similar hit vectors were driven by the same inputs in the same proportions, so they share a route.
 
-In the mixed4e:55 run the per-channel factor is a gradient attribution rather than the raw weight. For a linear 1x1 conv the gradient of the pre-activation with respect to an upstream channel is that channel's weight, so the two coincide.
+In the mixed4e:55 run the per-channel factor is the raw weight of the 1x1 conv. For a linear unit this equals the gradient of the pre-activation with respect to the input, so the hit vector is also gradient times input.
 
 ## 4. Distance
 
@@ -48,11 +48,11 @@ Why not Euclidean or cosine: Jaccard asks which inputs carry the mass and how mu
 
 **Current: density-peak forest** (Rodriguez and Laio, 2014). Clusters are hills of density; each hill has a peak; every hit belongs to the hill it climbs.
 
-- **Copies.** Identical hit vectors (image patches and repeated tokens repeat exactly) merge into one point with a count.
-- **Density.** For each point, the distance at which its k nearest neighbours, copies included, add up to k. Smaller is denser. Used as log density, rho. mixed4e:55 uses k = 5.
-- **Parent and delta.** Every point links to its nearest denser point (its parent). The distance is its delta. Typical points have small delta; a hilltop must cross a valley, so its delta is large.
+- **Copies.** Identical hit vectors (image patches and repeated tokens repeat exactly) merge into one point with a count. Vectors are compared after the sign split and rounded to 6 decimals, so float noise does not separate copies.
+- **Density.** For each point, the distance at which its k nearest neighbours, copies included, add up to k. Smaller is denser. Used as log density, rho = -log10(d_k + c), with c half the smallest nonzero d_k so points at distance 0 stay finite. mixed4e:55 uses k = 5.
+- **Parent and delta.** Points are ranked by density; ties, common at d_k = 0, go to the point with more copies. Every point links to its nearest denser point (its parent). The distance is its delta. Typical points have small delta; a hilltop must cross a valley, so its delta is large.
 - **Roots.** Sort rho and find its elbow, sort delta and find its elbow, and keep points above both. Every other point follows parents to exactly one root.
-- **Modes.** All points reaching the same root form one tree, and each tree is one mode.
+- **Modes.** All points reaching the same root form one tree, and each tree is one mode. Trees are numbered by size, largest first, so mode ids are not stable across runs; compare runs by membership, not by id.
 
 Picture two hills joined by a low ridge: points on each hill climb to its own summit, both summits become roots, and the ridge splits where the climbing direction changes.
 
@@ -64,9 +64,13 @@ The forest gives each hit one mode, but some hits sit between two.
 
 - **Peak** of a mode: all its points at least 0.8 as dense as its root.
 - **Geodesic distance:** distance walking along kNN graph edges, so crossing a sparse gap is expensive.
-- **Probability:** a softmax over each hit's geodesic distance to every mode's peak, with temperature one typical step (the median nearest-neighbour distance).
+- **Probability:** a softmax over each hit's geodesic distance to every mode's peak, with temperature one typical step (the median nearest-neighbour distance). A hit that reaches no peak along the graph gets probability 1 for its own tree.
+- **Mode of a hit:** from here on, a hit belongs to its most probable mode, not the tree it grew in. The two disagree often (5,218 of 14,240 hits for mixed4e:55), so touching modes, composition and reports all use the most probable mode.
 - **Entropy** of those probabilities, in bits. Under 0.5 bits is a confident hit; above is a mixed hit.
-- **Buckets:** hits where one mode has at least 0.9, 0.8 or 0.7 probability (nested), and set buckets of hits that need exactly the same set of modes to reach 0.85 of their probability (for example "modes 1 + 8"). Modes joined in the mutual kNN graph are said to touch.
+- **Buckets:** hits where one mode has at least 0.9, 0.8 or 0.7 probability (nested), and set buckets of hits that need exactly the same set of modes to reach 0.85 of their probability (for example "modes 1 + 8"), up to half of all modes. Buckets hold every qualifying hit, confident or not; entropy only marks hits in the report. Only buckets with at least 10 hits get a page. Modes are said to touch when a mutual kNN edge joins hits whose most probable modes differ.
+
+- **Mixed-hits sheet:** the mode report shows only confident hits. The rest go on a separate sheet, sampled across entropy levels so it runs from mildly to heavily mixed. Each hit is shown next to the mean hit vector of each of its likely modes, faded by its probability for that mode.
+- **Pair report:** a hit belongs to the pair of its two most probable modes when the second has at least 0.1. Pairs with at least 30 hits get a page, binned by entropy (edges 0.5, 1, 1.5, 2 bits), with each bin running from mostly one mode to mostly the other. This shows what changes along the border between two modes.
 
 This turns the boundary between modes into a measurement rather than an assumption, and gives the mixed hits a place in the record.
 
@@ -86,12 +90,12 @@ Attention scores are bilinear in query and key: `q^T W_Q^T W_K k`. Head dims are
 
 The usual approach squashes points into 2D with UMAP or t-SNE, which distorts distances. The map here projects nothing.
 
-1. Sample evenly spread hits from every bucket, plus each mode's peak.
+1. Sample 8 hits from every bucket of at least 10, at evenly spaced ranks of the bucket's leading-mode probability (so a set bucket runs from one side to the other), plus each mode's root.
 2. Build a kNN graph on the real distances, edge weight one minus distance, using the smallest k from 6, 10, 15, 25 that connects the graph.
 3. Add a pull: an edge from each hit to the peak of every mode where its probability is at least 0.1, weight 3 times that probability.
-4. Lay out with a force-directed spring layout.
+4. Lay out with a force-directed spring layout (300 iterations, fixed seed).
 
-Without the pull the picture is one blob, since a mixed hit's neighbours belong to many modes. With it, confident hits gather around their peak and a hit split between two modes sits between their peaks. Each hit is shown with a DeepLift card (vision) or its token and context (text), so a mode's meaning can be read off.
+Without the pull the picture is one blob, since a mixed hit's neighbours belong to many modes. With it, confident hits gather around their peak and a hit split between two modes sits between their peaks. Up to 6 hits per bucket, chosen the same way, are numbered and shown as cards: a DeepLift map (vision) or its token and context (text), next to the mean hit vector of its top 3 modes faded by probability, so a mode's meaning can be read off.
 
 ## Substitutions in specific experiments
 

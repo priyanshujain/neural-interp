@@ -21,6 +21,10 @@ class HitSpace:
 
     @property
     def cluster(self) -> np.ndarray:
+        return self.probs.argmax(1)
+
+    @property
+    def tree(self) -> np.ndarray:
         return self.forest.tree[self.point]
 
     @property
@@ -67,6 +71,7 @@ def summary(space: HitSpace) -> dict:
         "hits": len(space.hit_ids),
         "points": len(space.counts),
         "clusters": len(space.forest.roots),
+        "cluster_differs_from_tree": int((space.cluster != space.tree).sum()),
         "confident": int((space.entropy < 0.5).sum()),
         "cluster_sizes": np.bincount(space.cluster).tolist(),
         "rho_cut": space.forest.rho_cut,

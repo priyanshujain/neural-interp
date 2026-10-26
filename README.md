@@ -5,5 +5,4 @@ Neuron-level monosemanticity from exact input decompositions. Each strong activa
 The first target is an independent reproduction of the InceptionV1 `mixed4e:55` result.
 
 - [Thesis](docs/thesis/index.md)
-- [mixed4e:55 reproduction](docs/implementation/mixed4e_55.md)
-- [Colab notebook](notebooks/mixed4e_55.ipynb)
+- [mixed4e:55 reproduction](docs/implementation/mixed4e_55/README.md)

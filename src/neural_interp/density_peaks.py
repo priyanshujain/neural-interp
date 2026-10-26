@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from neural_interp.distance import signed_split
 from neural_interp.selection import elbow_index
 
 
@@ -18,18 +19,17 @@ class Forest:
 
 
 def collapse_copies(rows: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    unique, first, inverse, counts = np.unique(
-        rows, axis=0, return_index=True, return_inverse=True, return_counts=True
+    keys = np.round(signed_split(rows), 6)
+    _, first, inverse, counts = np.unique(
+        keys, axis=0, return_index=True, return_inverse=True, return_counts=True
     )
     order = np.argsort(first)
     remap = np.empty_like(order)
     remap[order] = np.arange(len(order))
-    return unique[order], counts[order], remap[inverse.ravel()]
+    return rows[first[order]], counts[order], remap[inverse.ravel()]
 
 
 def log_density(dist: np.ndarray, counts: np.ndarray, k: int) -> np.ndarray:
-    positive = dist[dist > 0]
-    floor = positive.min() / 2 if positive.size else 1.0
     radius = np.empty(len(dist))
     for i, row in enumerate(dist):
         order = np.argsort(row, kind="stable")
@@ -37,13 +37,15 @@ def log_density(dist: np.ndarray, counts: np.ndarray, k: int) -> np.ndarray:
         mass[order == i] -= 1
         reached = np.searchsorted(np.cumsum(mass), k)
         radius[i] = row[order[min(reached, len(order) - 1)]]
-    return -np.log(np.maximum(radius, floor))
+    positive = radius[radius > 0]
+    offset = positive.min() / 2 if positive.size else 1.0
+    return -np.log10(radius + offset)
 
 
 def build_forest(dist: np.ndarray, counts: np.ndarray, k: int = 5) -> Forest:
     n = len(dist)
     rho = log_density(dist, counts, k)
-    rank_order = np.lexsort((np.arange(n), -rho))
+    rank_order = np.lexsort((np.arange(n), -counts, -rho))
     rank = np.empty(n, dtype=np.int64)
     rank[rank_order] = np.arange(n)
 
@@ -73,4 +75,8 @@ def build_forest(dist: np.ndarray, counts: np.ndarray, k: int = 5) -> Forest:
             tree[i] = tree[parent[i]]
             depth[i] = depth[parent[i]] + 1
     parent[roots] = -1
+    by_size = np.argsort(-np.bincount(tree, weights=counts, minlength=len(roots)), kind="stable")
+    renumber = np.empty_like(by_size)
+    renumber[by_size] = np.arange(len(by_size))
+    tree, roots = renumber[tree], roots[by_size]
     return Forest(rho, delta, parent, roots, tree, depth, float(rho_cut), float(delta_cut))

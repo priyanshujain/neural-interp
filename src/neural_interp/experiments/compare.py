@@ -9,10 +9,10 @@ from neural_interp.vision.labels import group
 
 def reference_hits(space_dir: Path) -> tuple[list[str], np.ndarray, np.ndarray]:
     hits = np.load(space_dir / "hits.npz", allow_pickle=True)
-    trees = np.load(space_dir / "trees.npz")
     distinct = np.load(space_dir / "forest.npz")["distinct_of_hit"]
+    probs = np.load(space_dir / "probabilities.npy")
     ids = [f"{hits['sample_ids'][b]}:{t}" for b, t in zip(hits["batch_idx"], hits["token_idx"])]
-    return ids, trees["tree"][distinct], hits["activations"]
+    return ids, probs[distinct].argmax(1), hits["activations"]
 
 
 def worlds(ids: list[str], cluster: np.ndarray) -> dict:

@@ -9,7 +9,7 @@
 ## Setup
 
 - Inputs: 2,000 images drawn from a pool of cats, cars and dogs. Every spatial position of every image is a candidate activation.
-- Hits: elbow cut over all activations, giving 14,240 hits. A bucketed run was also made.
+- Hits: elbow cut over the positive activations, giving 14,240 hits. A bucketed run was also made.
 - Hit vector: 528-long Hadamard product of upstream activations and their attributions.
 - Distance: sign-split weighted Jaccard, not normalised.
 - Modes: density-peak forest, k = 5, elbow root cuts, then soft membership, buckets and maps as in [method.md](method.md).
@@ -29,4 +29,4 @@ This is what the claim predicts: the neuron is polysemantic as a whole, and the 
 
 ## Artifacts
 
-Elbow and bucketed reports, and a full reproduction archive. Paths and the reproduction notebook are in [../implementation/in_tfm_neuron_clustering.md](../implementation/in_tfm_neuron_clustering.md).
+Elbow and bucketed reports, and a full reproduction archive. Paths and the reproduction notebook are in [../implementation/mixed4e_55/in_tfm_neuron_clustering.md](../implementation/mixed4e_55/in_tfm_neuron_clustering.md).

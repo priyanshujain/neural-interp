@@ -10,11 +10,11 @@ from neural_interp.density_peaks import build_forest, collapse_copies
 from neural_interp.distance import weighted_jaccard
 from neural_interp.layout import hit_map, map_nodes
 from neural_interp.membership import soft_membership
-from neural_interp.report import write_report
+from neural_interp.report import Tile, write_report
 from neural_interp.selection import bucketed_hits, elbow_hits
 from neural_interp.space import HitSpace, summary
 from neural_interp.vision import inception
-from neural_interp.vision.cards import overlay, save_card
+from neural_interp.vision.cards import attribution_overlay, framed, save_tiles
 from neural_interp.vision.labels import group, synset_name
 
 
@@ -29,9 +29,7 @@ class Config:
     budget: int = 14000
     k: int = 5
     peak_share: float = 0.8
-    max_entropy: float = 0.5
-    per_bucket: int = 40
-    min_set_bucket: int = 10
+    min_bucket: int = 10
 
 
 def device() -> str:
@@ -74,6 +72,7 @@ def collect(cfg: Config) -> HitSpace:
     )
     space_dir = cfg.out / "space"
     space.save(space_dir)
+    np.save(space_dir / "all_activations.npy", flat)
     (space_dir / "config.json").write_text(json.dumps({k: str(v) for k, v in asdict(cfg).items()}, indent=1))
     (space_dir / "summary.json").write_text(json.dumps(summary(space), indent=1))
     print(json.dumps({k: v for k, v in summary(space).items() if k != "cluster_sizes"}))
@@ -97,31 +96,33 @@ def composition(space: HitSpace) -> list[dict]:
 def report(cfg: Config) -> None:
     space = HitSpace.load(cfg.out / "space")
     dist_hits = np.asarray(space.dist)[np.ix_(space.point, space.point)]
-    confident = space.entropy < cfg.max_entropy
-    buckets = cluster_buckets(space.probs)
-    buckets += set_buckets(space.probs, min_hits=cfg.min_set_bucket)
-    for b in buckets:
-        b.hits = b.hits[confident[b.hits]] if len(b.clusters) == 1 else b.hits
-
-    peak_hits = np.array([int(np.flatnonzero(space.point == r)[0]) for r in space.forest.roots])
-    nodes = map_nodes(dist_hits, buckets, peak_hits, cfg.per_bucket)
-    positions = hit_map(dist_hits, space.probs, nodes, peak_hits)
+    buckets = cluster_buckets(space.probs) + set_buckets(space.probs)
+    buckets = [b for b in buckets if len(b.hits) >= cfg.min_bucket]
+    root_hits = np.array([int(np.flatnonzero(space.point == r)[0]) for r in space.forest.roots])
+    nodes = map_nodes(buckets, space.probs, root_hits)
+    positions = hit_map(dist_hits, space.probs, nodes, root_hits)
 
     dev = device()
     model = inception.load_model(dev)
     cards_dir = cfg.out / "report" / "cards"
     attribution_of = inception.NeuronAttribution(model, inception.MIXED4E_55)
 
-    def card(hit: int) -> str:
+    def tile(hit: int) -> Tile:
         path, pos = space.hit_ids[hit].rsplit(":", 1)
         grid = 14
         y, x = divmod(int(pos), grid)
         pixels = inception.preprocess(cfg.pool / path)
         attribution = attribution_of.map(pixels.to(dev), y, x)
-        src = save_card(cards_dir, f"hit_{hit}", pixels.numpy(), overlay(pixels.numpy(), attribution, y, x, grid))
-        return f'<img src="{src}" width="448"><div>{synset_name(wnid(space.hit_ids[hit]))}</div>'
+        array = pixels.numpy()
+        image, overlay = save_tiles(cards_dir, f"hit_{hit}", framed(array, y, x, grid),
+                                    attribution_overlay(array, attribution, y, x, grid))
+        return Tile(image, overlay, synset_name(wnid(space.hit_ids[hit])))
 
+    all_activations = cfg.out / "space" / "all_activations.npy"
     write_report(
-        cfg.out / "report", space, buckets, positions, card, group_of=lambda h: group(wnid(space.hit_ids[h]))
+        cfg.out / "report", space, buckets, positions, tile,
+        group_of=lambda h: group(wnid(space.hit_ids[h])),
+        all_activations=np.load(all_activations) if all_activations.exists() else None,
+        unit="InceptionV1 mixed4e:55",
     )
     (cfg.out / "report" / "composition.json").write_text(json.dumps(composition(space), indent=1))

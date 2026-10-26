@@ -6,7 +6,7 @@ The work below is what the thesis builds on or argues against. Each entry says w
 
 ## Neurons as units: feature visualization and Circuits
 
-**Simonyan, Vedaldi and Zisserman 2013**, [Deep Inside Convolutional Networks: Visualising Image Classification Models and Saliency Maps](https://arxiv.org/abs/1312.6034). Gradient saliency maps and class visualization by optimizing the input. The ancestor of both feature visualization and gradient attribution. We use neither directly, but the per-channel factor in our mixed4e:55 run is a gradient.
+**Simonyan, Vedaldi and Zisserman 2013**, [Deep Inside Convolutional Networks: Visualising Image Classification Models and Saliency Maps](https://arxiv.org/abs/1312.6034). Gradient saliency maps and class visualization by optimizing the input. The ancestor of both feature visualization and gradient attribution. We use neither directly, but the per-channel factor in our mixed4e:55 run, the conv weight, equals the gradient for a linear unit.
 
 **Olah, Mordvintsev and Schubert 2017**, [Feature Visualization](https://distill.pub/2017/feature-visualization/). Optimizes inputs to excite a neuron, and shows that some neurons give mixed images because they respond to several unrelated things. It names the problem we address but treats the neuron as one object to visualize. Our modes split a neuron's real hits instead of synthesizing one image for the whole neuron.
 
@@ -79,6 +79,12 @@ Nick Cammarata is an author on all of the Circuits papers above and on Bills et 
 ## Automated explanation
 
 **Bills, Cammarata, Mossing, Tillman, Gao, Goh, Sutskever, Leike, Wu and Saunders 2023**, [Language models can explain neurons in language models](https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html). GPT-4 writes and scores explanations of every GPT-2 neuron, and scores are low, partly attributed to polysemanticity. Our modes offer a fix it could use: explain each mode separately, so each explanation has one meaning to capture.
+
+## Embedding dimensions as units
+
+Reading single dimensions of a word embedding as features is an old line, mostly for static embeddings. **Murphy, Talukdar and Mitchell 2012** (NNSE) and **Faruqui et al. 2015** (sparse overcomplete word vectors) learn sparse embeddings so dimensions become interpretable; **Subramanian et al. 2018** (SPINE) does the same with an autoencoder. **Rothe and Schütze 2016** rotate an embedding so a few dimensions carry a chosen property, which assumes the original axes are arbitrary. **Şenel et al. 2018** measure how interpretable the raw dimensions of trained embeddings are against semantic categories. For transformers, **Kovaleva et al. 2021** and **Timkey and van Schijndel 2021** find a few rogue or outlier dimensions that dominate similarity, and **Elhage et al. 2023** (Anthropic, privileged bases) show the residual stream has a privileged basis when the optimiser makes it so.
+
+So asking what one embedding dimension encodes is not new. What these works do not do is treat one dimension as a neuron and split its strong values into modes. Our embedding runs must be positioned against Şenel et al. and the privileged-basis work, not presented as a new view of `W_E`.
 
 ## Clustering
 

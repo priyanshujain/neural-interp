@@ -40,3 +40,15 @@ def set_buckets(probs: np.ndarray, mass: float = 0.85, min_hits: int = 1) -> lis
         if len(hits) >= min_hits
     ]
     return sorted(out, key=lambda b: -len(b.hits))
+
+
+def leading_cluster(bucket: Bucket, probs: np.ndarray) -> int:
+    return int(bucket.clusters[np.argmax(probs[np.ix_(bucket.hits, bucket.clusters)].sum(0))])
+
+
+def ranked_sample(bucket: Bucket, probs: np.ndarray, n: int) -> np.ndarray:
+    lead = probs[bucket.hits, leading_cluster(bucket, probs)]
+    ranked = bucket.hits[np.argsort(-lead, kind="stable")]
+    if len(ranked) <= n:
+        return ranked
+    return ranked[np.unique(np.linspace(0, len(ranked) - 1, n).round().astype(int))]

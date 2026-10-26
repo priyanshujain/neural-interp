@@ -40,11 +40,10 @@ def knn_graph(dist: np.ndarray, k: int, mutual: bool = False) -> csr_matrix:
 
 
 def peaks(forest: Forest, share: float = 0.8) -> list[np.ndarray]:
-    density = np.exp(forest.rho - forest.rho.max())
     out = []
     for t, root in enumerate(forest.roots):
         members = np.flatnonzero(forest.tree == t)
-        out.append(members[density[members] >= share * density[root]])
+        out.append(members[forest.rho[members] >= share * forest.rho[root]])
     return out
 
 
@@ -59,21 +58,22 @@ def soft_membership(dist: np.ndarray, forest: Forest, k: int = 5, peak_share: fl
     geodesic = np.stack(
         [dijkstra(graph, directed=False, indices=top, min_only=True) for top in tops], axis=1
     )
-    stranded = ~np.isfinite(geodesic).any(1)
-    if stranded.any():
-        direct = np.stack([dist[np.ix_(np.flatnonzero(stranded), top)].min(1) for top in tops], axis=1)
-        geodesic[stranded] = direct
     nearest = dist[np.arange(len(dist)), knn_indices(dist, 1)[:, 0]]
     temperature = float(np.median(nearest[np.isfinite(nearest) & (nearest > 0)]))
     logits = -geodesic / temperature
-    logits -= np.nanmax(np.where(np.isfinite(logits), logits, -np.inf), axis=1, keepdims=True)
-    weights = np.where(np.isfinite(logits), np.exp(logits), 0.0)
+    finite = np.isfinite(logits)
+    top = np.where(finite, logits, -np.inf).max(1, keepdims=True)
+    weights = np.where(finite, np.exp(logits - np.where(np.isfinite(top), top, 0)), 0.0)
+    stranded = weights.sum(1) == 0
+    weights[stranded] = 0.0
+    weights[stranded, forest.tree[stranded]] = 1.0
     probs = weights / weights.sum(1, keepdims=True)
+    mode = probs.argmax(1)
 
     mutual = knn_graph(dist, k, mutual=True).tocoo()
     pairs = {
         (int(min(a, b)), int(max(a, b)))
-        for a, b in zip(forest.tree[mutual.row], forest.tree[mutual.col])
+        for a, b in zip(mode[mutual.row], mode[mutual.col])
         if a != b
     }
     return Membership(tops, geodesic, probs, entropy_bits(probs), temperature, sorted(pairs))
