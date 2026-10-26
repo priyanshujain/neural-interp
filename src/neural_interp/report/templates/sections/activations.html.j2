@@ -1,0 +1,18 @@
+{% from "macros.html.j2" import section, plot, tabs %}
+{% call section("1", "Activations and the elbow") %}
+  All {{ activations.total|fmt(',') }} activations of the unit, of which
+  {{ activations.positive|fmt(',') }} are positive. Sorted from low to high, most sit in a long
+  flat stretch and a few thousand shoot up at the end. The elbow is where the curve bends: draw a
+  straight line from the first point to the last, and take the point where the curve is furthest
+  below it. Everything right of the elbow is a hit: activation &ge;
+  <b>{{ activations.cut|fmt('.4g') }}</b>, <b>{{ activations.hits|fmt(',') }}</b> hits.
+{% endcall %}
+{% set histogram %}
+<p class="lede">
+  How many activations take each value. Bars are counts on a log scale, so each gridline is ten
+  times the one below. Values at or below zero are the unit not firing; the pile just above zero
+  is weak firing; the thin right tail, shaded, is the hits.
+</p>
+{{ plot(activations.histogram) }}
+{% endset %}
+{{ tabs("act", [("Sorted curve", plot(activations.curve)), ("Histogram", histogram)]) }}

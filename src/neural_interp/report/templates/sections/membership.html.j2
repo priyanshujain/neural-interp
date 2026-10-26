@@ -1,0 +1,15 @@
+{% from "macros.html.j2" import section, plot, tabs %}
+{% call section("4", "Soft membership") %}
+  Probabilities come from graph distance to each cluster's peak.
+  <b>{{ membership.moved|fmt(',') }}</b> hits are most probable in a different cluster than the
+  tree they grew in; from here on a hit's cluster is its most probable one. Hits under 0.5 bits of
+  entropy are confident.
+{% endcall %}
+{% set touching %}
+<p class="lede">
+  Row = cluster, column = neighbour. Each cell is the share of the cluster's mutual-neighbour
+  edges that land in the neighbour. The diagonal is how self-contained a cluster is.
+</p>
+{{ plot(membership.touching) }}
+{% endset %}
+{{ tabs("member", [("Entropy", plot(membership.entropy)), ("Which clusters touch", touching)]) }}

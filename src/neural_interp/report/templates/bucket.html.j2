@@ -1,0 +1,24 @@
+{% extends "base.html.j2" %}
+{% from "macros.html.j2" import chip, composition_bar, plot %}
+{% block title %}{{ name }}{% endblock %}
+{% block main %}
+<p><a href="index.html">&larr; back to report</a></p>
+<h1>{{ name }}</h1>
+<div class="meta">
+  <span>clusters {% for cluster in clusters %}{{ chip(cluster, "index.html") }}{% endfor %}</span>
+  <span><b>{{ size|fmt(',') }}</b> hits,
+    {% if single %}probability &ge; {{ threshold }}{% else %}these clusters cover {{ threshold|fmt('.0%') }} of probability{% endif %}
+  </span>
+  {{ composition_bar(composition) }}
+</div>
+<p class="lede">
+  Stars: 8 hits sampled at evenly spaced ranks of the leading cluster's probability. The 6
+  numbered ones are shown below with input, DeepLift, hit vector and top cluster probabilities.
+</p>
+{{ plot(map) }}
+<div class="grid">
+  {% for tile in tiles %}
+  {% include "tile.html.j2" %}
+  {% endfor %}
+</div>
+{% endblock %}

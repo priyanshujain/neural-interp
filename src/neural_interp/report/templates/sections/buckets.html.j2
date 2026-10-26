@@ -1,0 +1,10 @@
+{% from "macros.html.j2" import section %}
+{% call section("8", "All buckets") %}
+  Every bucket with at least 10 hits, each with its own page.
+{% endcall %}
+<table>
+  <tr><th>bucket</th><th>hits</th></tr>
+  {% for bucket in buckets %}
+  <tr><td><a href="{{ bucket.href }}">{{ bucket.name }}</a></td><td>{{ bucket.size|fmt(',') }}</td></tr>
+  {% endfor %}
+</table>

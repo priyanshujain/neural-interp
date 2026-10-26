@@ -1,0 +1,59 @@
+{% from "macros.html.j2" import section, plot, tabs %}
+{% call section("3", "Density-peak forest") %}
+  Every point has a density rho (from the distance to its 5th neighbour) and a delta (distance to
+  the nearest denser point). Roots are the points above both elbow cuts,
+  rho &ge; <b>{{ forest.rho_cut|fmt('.3f') }}</b> and
+  delta &ge; <b>{{ forest.delta_cut|fmt('.3f') }}</b>: dense, and far from anything denser. This
+  gives <b>{{ forest.n_roots }}</b> roots.
+{% endcall %}
+{% set decision %}
+<p class="lede">
+  Each dot is a hit, coloured by the tree it ends up in. Right means a crowded neighbourhood; up
+  means it must travel far to reach anything denser. Most hits sit low: a denser hit is close by,
+  so they are on the slope of some hill. Hilltops are both crowded and far from anything denser,
+  so they land in the top-right corner, past both cut lines. High dots on the left are loners,
+  not centres.
+</p>
+{{ plot(forest.decision) }}
+{% endset %}
+{% set separation %}
+<p class="lede">
+  How clearly each peak stands out. Every root is dense enough; its bar is how far it is from
+  anything denser. Tall bars are clear, separate peaks; bars just above the cut are marginal and
+  would merge with a slightly stricter cut. Grey bars are the best dense points that did not make
+  it.
+</p>
+{{ plot(forest.separation) }}
+{% endset %}
+{% set up_close %}
+<p class="lede">
+  A slice of the real forest: up to {{ forest.up_close.per_tree }} random hits from every cluster,
+  plus every hit on their path up to the root, laid out once on real distances, so near means
+  similar and positions stay fixed as you add clusters. Each line joins a hit to its parent, the
+  nearest denser hit; bigger dots are denser; stars are roots. Pick clusters below to compare
+  them; it starts with the two large clusters that touch most.
+</p>
+<div class="picker" data-trees="{{ forest.n_roots }}">
+  <button class="ctl" onclick="pickAll(true)">all</button>
+  <button class="ctl" onclick="pickAll(false)">none</button>
+  {% for tree in forest.up_close.picks %}
+  <button class="pick{{ ' on' if tree.on }}" data-t="{{ tree.id }}" style="--c:{{ tree.color }}" onclick="pick(this)">c{{ tree.id }}</button>
+  {% endfor %}
+</div>
+{{ plot(forest.up_close.figure) }}
+{% endset %}
+{% set landscape %}
+<p class="lede">
+  Each tree drawn as a hill: height is density, lines are parent links, the root sits on top. The
+  horizontal position is only the order of points along their tree, not a distance; read this
+  chart for depth and density. Click a cluster in the legend to isolate it, double-click others
+  to add them.
+</p>
+{{ plot(forest.landscape) }}
+{% endset %}
+{{ tabs("forest", [
+  ("Decision graph", decision),
+  ("Peak separation", separation),
+  ("Forest up close", up_close),
+  ("Forest landscape", landscape),
+]) }}

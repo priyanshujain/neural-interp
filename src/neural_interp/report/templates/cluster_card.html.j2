@@ -1,0 +1,25 @@
+{% from "macros.html.j2" import chip, composition_bar, strips %}
+<section class="card" id="cluster-{{ card.cluster.id }}" style="--c:{{ card.cluster.color }}">
+  <header>
+    <h3>Cluster {{ card.cluster.id }}</h3>
+    <span>n={{ card.size|fmt(',') }} &middot; {{ card.sources|fmt(',') }} distinct inputs</span>
+    {{ composition_bar(card.composition) }}
+  </header>
+  <div class="body">
+    <div class="meta">
+      <span>activation <b>{{ card.low|fmt('.3g') }} to {{ card.high|fmt('.3g') }}</b>, median {{ card.median|fmt('.3g') }}</span>
+      <span>confident <b>{{ card.confident|fmt('.0%') }}</b></span>
+      <span>self-contained <b>{{ card.self_contained|fmt('.0%') }}</b></span>
+      <span>nearest clusters {% for neighbour, share in card.neighbours %}{{ chip(neighbour) }}<span class="share">{{ share|fmt('.0%') }}</span>{% else %}none{% endfor %}</span>
+      <span>mean hit vector <img class="mean-vector" src="{{ card.pattern }}"></span>
+      <span>bucket pages
+        {% for threshold, href in card.bucket_links %}
+        <a href="{{ href }}">&ge;{{ threshold }}</a>
+        {% else %}
+        none
+        {% endfor %}
+      </span>
+    </div>
+    {{ strips("Most confident hits, one per input", card.hits) }}
+  </div>
+</section>

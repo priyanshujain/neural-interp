@@ -1,0 +1,10 @@
+{% from "macros.html.j2" import section %}
+{% call section("7", "Group clusters") %}
+  Hits that need the same set of clusters to cover 85% of their probability: the borders between
+  clusters. Each row runs from hits leaning to the leading cluster to hits leaning away from it.
+{% endcall %}
+{% for card in group_cards %}
+{% include "group_card.html.j2" %}
+{% else %}
+<p>none</p>
+{% endfor %}

@@ -2,104 +2,33 @@ import html
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import networkx as nx
 import numpy as np
 import plotly.graph_objects as go
+from markupsafe import Markup
 from PIL import Image
-from plotly.colors import qualitative
 
 from neural_interp.buckets import Bucket, ranked_sample
 from neural_interp.cluster import knn_graph
+from neural_interp.report._render import PALETTE, color, embed, render
+from neural_interp.report._views import (
+    ClusterCard,
+    ClusterRef,
+    GroupCard,
+    HitView,
+    Part,
+    TileView,
+    TreePick,
+    UpClose,
+)
 from neural_interp.selection import elbow_index
 from neural_interp.space import HitSpace
 from neural_interp.typing import FloatArray
 
 Positions = dict[int, tuple[float, float]]
-BucketLinks = dict[int, list[tuple[str, str]]]
-
-
-def bright(hex_color: str) -> bool:
-    r, g, b = (int(hex_color[i : i + 2], 16) / 255 for i in (1, 3, 5))
-    return 0.25 < 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.85
-
-
-PALETTE = [
-    c
-    for c in qualitative.Plotly
-    + qualitative.D3
-    + qualitative.Light24
-    + qualitative.Alphabet
-    + qualitative.Dark24
-    if bright(c)
-]
-PANEL = "#1f2229"
-CDN = "<script src='https://cdn.plot.ly/plotly-2.35.2.min.js'></script>"
-
-CSS = """
-*{box-sizing:border-box}
-body{margin:0;background:#16181d;color:#d7dae0;\
-font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
-main{max-width:1800px;margin:0 auto;padding:24px 32px 80px}
-a{color:#8ab4ff;text-decoration:none}a:hover{text-decoration:underline}
-h1{font-size:28px;margin:0 0 4px}h2{font-size:22px;margin:48px 0 4px;padding-top:16px;\
-border-top:1px solid #2c3039}
-h2 .step{color:#7b8191;font-weight:400;margin-right:8px}
-.lede{color:#9aa1ae;max-width:1100px;margin:4px 0 16px}.lede b{color:#fff}
-.stats{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
-.stat{background:#1f2229;border-radius:8px;padding:10px 16px}.stat b{display:block;font-size:22px;\
-color:#fff}
-.stat span{color:#9aa1ae;font-size:13px}
-details.guide{background:#1f2229;border-radius:8px;padding:12px 18px;margin:12px 0;max-width:1200px}
-details summary{cursor:pointer;color:#c9ccd3;font-weight:600}
-.guide dt{font-weight:600;color:#fff;margin-top:10px}.guide dd{margin:2px 0 0 0;color:#aab0bc}
-.plot{width:100%;background:#1f2229;border-radius:8px;margin:8px 0}
-.tabs button{background:#2a2e37;color:#d7dae0;border:0;padding:8px 16px;border-radius:6px 6px 0 0;\
-cursor:pointer;font-size:14px}
-.tabs button.on{background:#3b4150;color:#fff}
-.tabpane{display:none}.tabpane.on{display:block}
-.card{background:#1f2229;border-radius:10px;margin:28px 0;overflow:hidden;\
-border-left:6px solid var(--c)}
-.card header{background:var(--c);color:#fff;padding:12px 20px;display:flex;flex-wrap:wrap;\
-align-items:center;gap:16px}
-.card header h3{margin:0;font-size:22px}.card header span{opacity:.92}
-.card header .legend{color:#fff}
-.card .body{padding:16px 20px}
-.strip{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin:4px 0}
-.strip img{width:100%;aspect-ratio:1;object-fit:cover;display:block;border-radius:3px;\
-background:#000}
-.label{font-size:12px;color:#9aa1ae;margin:8px 0 2px}
-.meta{display:flex;flex-wrap:wrap;align-items:center;gap:24px;font-size:14px;color:#aab0bc;\
-margin:4px 0 10px}
-.meta b{color:#fff}
-.bar{display:flex;height:10px;border-radius:5px;overflow:hidden;width:260px;background:#333}
-.legend{display:flex;gap:12px;font-size:12px;color:#aab0bc}.legend i{display:inline-block;\
-width:10px;height:10px;border-radius:2px;margin-right:4px}
-.chip{display:inline-block;padding:1px 8px;border-radius:10px;color:#fff !important;font-size:13px;\
-margin-right:4px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:16px;\
-margin-top:16px}
-.tile{background:#262a32;border-radius:8px;padding:10px}
-.tile .pair{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:6px}
-.tile .pair img{width:100%;border-radius:3px;display:block}
-.tile .pattern{display:block;height:88px;margin:6px auto 0;image-rendering:pixelated;\
-border-radius:3px}
-.tile .num{font-weight:700;color:#ffd600}
-.tile .id{font-size:12px;color:#7b8191;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.probs{margin-top:6px}.probs div{display:flex;align-items:center;gap:6px;font-size:12px}
-.probs .fill{height:8px;border-radius:4px}
-table{border-collapse:collapse;font-size:14px}td,th{padding:4px 12px;\
-border-bottom:1px solid #2c3039;text-align:left}
-th{color:#9aa1ae;font-weight:500}
-details.patterns summary{font-weight:500;margin-top:8px}
-"""
-
-TABS_JS = """<script>
-function tab(g,n){document.querySelectorAll('[data-g="'+g+'"]').forEach(\
-e=>e.classList.toggle('on',e.dataset.n===n));
-window.dispatchEvent(new Event('resize'));}
-</script>"""
+BucketLinks = dict[int, list[tuple[float, str]]]
 
 
 @dataclass
@@ -109,47 +38,12 @@ class Tile:
     label: str
 
 
-def color(cluster: int) -> str:
-    return PALETTE[int(cluster) % len(PALETTE)]
-
-
 def slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "bucket"
 
 
-def page(title: str, body: str) -> str:
-    return (
-        "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' "
-        "content='width=device-width'>"
-        f"<title>{html.escape(title)}</title><style>{CSS}</style>{CDN}{TABS_JS}</head>"
-        f"<body><main>{body}</main></body></html>"
-    )
-
-
-def embed(fig: go.Figure, height: str = "70vh", div_id: str | None = None) -> str:
-    fig.update_layout(
-        template="plotly_dark",
-        paper_bgcolor=PANEL,
-        plot_bgcolor=PANEL,
-        autosize=True,
-        margin=dict(l=60, r=20, t=30, b=40),
-        font=dict(size=13),
-    )
-    inner = fig.to_html(
-        full_html=False,
-        include_plotlyjs=False,
-        default_width="100%",
-        default_height=height,
-        config={"responsive": True, "displaylogo": False},
-        div_id=div_id,
-    )
-    return f"<div class='plot'>{inner}</div>"
-
-
-def section(step: str, title: str, lede: str) -> str:
-    return (
-        f"<h2><span class='step'>{step}</span>{html.escape(title)}</h2><p class='lede'>{lede}</p>"
-    )
+def ref(cluster: int) -> ClusterRef:
+    return ClusterRef(int(cluster), color(cluster))
 
 
 def source_of(hit_id: str) -> str:
@@ -235,81 +129,8 @@ class HitSpaceReport:
             pattern_png(np.asarray(self.space.rows[self.cluster == c]).mean(0), path)
         return f"patterns/{path.name}"
 
-    def chip(self, c: int, prefix: str = "") -> str:
-        return f"<a class='chip' href='{prefix}#cluster-{c}' style='background:{color(c)}'>c{c}</a>"
-
-    def tabs(self, group: str, panes: dict[str, str]) -> str:
-        names = list(panes)
-        buttons = "".join(
-            f"<button data-g='{group}' data-n='{i}' class='{'on' if i == 0 else ''}' "
-            f"onclick=\"tab('{group}','{i}')\">{html.escape(n)}</button>"
-            for i, n in enumerate(names)
-        )
-        bodies = "".join(
-            f"<div data-g='{group}' data-n='{i}' class='tabpane "
-            f"{'on' if i == 0 else ''}'>{panes[n]}</div>"
-            for i, n in enumerate(names)
-        )
-        return f"<div class='tabs'>{buttons}</div>{bodies}"
-
-    def guide(self) -> str:
-        items = [
-            (
-                "Hit",
-                "A position where the unit fires strongly: an image patch for a vision unit, a "
-                "token for a text unit. Hits are the positive activations past the elbow of the "
-                "sorted curve (section 1).",
-            ),
-            (
-                "Hit vector",
-                "The exact contribution of every upstream channel to one hit: upstream "
-                "activation times the unit's weight for that channel. It sums to the unit's "
-                "pre-activation minus its bias. Drawn as a grid of channels: green pushes the "
-                "unit up, red pushes it down.",
-            ),
-            (
-                "Distance",
-                "Weighted Jaccard between hit vectors, positive and negative parts compared "
-                "separately. 0 means the same channels drove both hits in the same amounts, 1 "
-                "means no channel in common.",
-            ),
-            (
-                "Forest and clusters",
-                "Each hit links to its nearest denser hit. Hits that are both dense and far "
-                "from anything denser become roots, and every other hit climbs to one root. "
-                "Each root's tree is a cluster (section 3).",
-            ),
-            (
-                "Probability and entropy",
-                "Each hit gets a probability for every cluster from its graph distance to that "
-                "cluster's peak. A hit's cluster is its most probable one. Entropy in bits says "
-                "how split it is; under 0.5 is confident.",
-            ),
-            (
-                "Map",
-                "Hits laid out by a spring layout on their real distances, with an extra pull "
-                "toward the peaks of the clusters they likely belong to. Nothing is projected: "
-                "a hit between two clusters sits between their peaks.",
-            ),
-            (
-                "DeepLift",
-                "Which input pixels drove this hit, against a black baseline. Yellow raises the "
-                "unit, blue lowers it. The box marks the hit's position.",
-            ),
-            (
-                "Group clusters",
-                "Hits that need the same set of clusters to cover 85% of their probability: the "
-                "borders between clusters.",
-            ),
-        ]
-        body = "".join(f"<dt>{t}</dt><dd>{d}</dd>" for t, d in items)
-        return (
-            "<details class='guide'><summary>How to read this "
-            f"report</summary><dl>{body}</dl></details>"
-        )
-
-    def header(self) -> str:
-        stats = [
+    def header_stats(self) -> list[tuple[str, str]]:
+        return [
             (
                 f"{len(self.all_activations):,}" if self.all_activations is not None else "-",
                 "activations",
@@ -319,10 +140,8 @@ class HitSpaceReport:
             (f"{int((self.entropy < 0.5).sum()):,}", "confident hits"),
             (f"{len(self.space.membership.touching_)}", "touching cluster pairs"),
         ]
-        cells = "".join(f"<div class='stat'><b>{v}</b><span>{k}</span></div>" for v, k in stats)
-        return f"<h1>{html.escape(self.unit)}</h1><div class='stats'>{cells}</div>{self.guide()}"
 
-    def activations(self) -> str:
+    def activations(self) -> dict[str, Any]:
         values = self.all_activations
         assert values is not None
         cut = float(self.activation.min())
@@ -330,17 +149,6 @@ class HitSpaceReport:
         n = len(positive)
         elbow = n - 1 - elbow_index(positive[::-1])
         chord = positive[0] + (positive[-1] - positive[0]) * elbow / (n - 1)
-        out = section(
-            "1",
-            "Activations and the elbow",
-            f"All {len(values):,} activations of the unit, of which {n:,} are positive. Sorted "
-            "from low to high, most sit in a long flat stretch "
-            "and a few thousand shoot up at the end. The elbow is where the curve bends: draw a "
-            "straight line from the first point to the last, "
-            "and take the point where the curve is furthest below it. Everything right of the "
-            f"elbow is a hit: activation &ge; <b>{cut:.4g}</b>, "
-            f"<b>{len(self.activation):,}</b> hits.",
-        )
         step = max(1, n // 4000)
         idx = np.unique(np.concatenate([np.arange(0, n, step), np.arange(max(0, n - 4000), n)]))
         curve = go.Figure()
@@ -415,24 +223,16 @@ class HitSpaceReport:
         hist.update_yaxes(type="log", title="number of activations (log scale)")
         hist.update_xaxes(title="activation")
         hist.update_layout(showlegend=False)
-        hist_note = (
-            "<p class='lede'>How many activations take each value. Bars are counts on a log "
-            "scale, so each gridline is ten times the one below. "
-            "Values at or below zero are the unit not firing; the pile just above zero is weak "
-            "firing; the thin right tail, shaded, is the hits.</p>"
-        )
-        return out + self.tabs(
-            "act",
-            {"Sorted curve": embed(curve, "65vh"), "Histogram": hist_note + embed(hist, "60vh")},
-        )
+        return {
+            "total": len(values),
+            "positive": n,
+            "cut": cut,
+            "hits": len(self.activation),
+            "curve": embed(curve, "65vh"),
+            "histogram": embed(hist, "60vh"),
+        }
 
-    def hit_ranges(self) -> str:
-        out = section(
-            "2",
-            "Activation range of each cluster",
-            "Each box is a cluster, largest first. Clusters are not activation bands: strong "
-            "and moderate hits share a cluster when the same channels drive them.",
-        )
+    def hit_ranges(self) -> Markup:
         fig = go.Figure()
         for c in np.argsort(-self.sizes, kind="stable"):
             members = self.cluster == c
@@ -449,9 +249,9 @@ class HitSpaceReport:
                 )
         fig.update_layout(showlegend=False)
         fig.update_yaxes(title="activation", type="log")
-        return out + embed(fig, "55vh")
+        return embed(fig, "55vh")
 
-    def peak_separation(self) -> str:
+    def peak_separation(self) -> Markup:
         f = self.space.forest
         is_root = np.zeros(len(f.rho_), bool)
         is_root[f.roots_] = True
@@ -484,15 +284,9 @@ class HitSpaceReport:
             title="roots (coloured) and the best non-roots that are dense enough (grey)",
             type="category",
         )
-        return (
-            "<p class='lede'>How clearly each peak stands out. Every root is dense enough; its "
-            "bar is how far it is from anything denser. "
-            "Tall bars are clear, separate peaks; bars just above the cut are marginal and would "
-            "merge with a slightly stricter cut. "
-            "Grey bars are the best dense points that did not make it.</p>" + embed(fig, "60vh")
-        )
+        return embed(fig, "60vh")
 
-    def forest_up_close(self, per_tree: int = 60, iterations: int = 150, seed: int = 0) -> str:
+    def forest_up_close(self, per_tree: int = 60, iterations: int = 150, seed: int = 0) -> UpClose:
         f = self.space.forest
         point_mode = np.asarray(self.space.membership.probabilities_).argmax(1)
         n_trees = len(f.roots_)
@@ -587,42 +381,8 @@ class HitSpaceReport:
         order = [
             int(c) for c in np.argsort(-np.bincount(f.labels_, minlength=n_trees), kind="stable")
         ]
-        chips = "".join(
-            f"<button class='pick{' on' if t in default else ''}' data-t='{t}' "
-            f"style='--c:{color(t)}' onclick='pick(this)'>c{t}</button>"
-            for t in order
-        )
-        script = f"""<script>
-function upclose(){{const on=[...document.querySelectorAll('.pick.on')].map(b=>+b.dataset.t);
-const vis=[];for(let t=0;t<{n_trees};t++){{const v=on.includes(t);vis.push(v,v,v);}}
-Plotly.restyle('upclose',{{visible:vis}});\
-Plotly.relayout('upclose',{{'xaxis.autorange':true,'yaxis.autorange':true}});}}
-function pick(b){{b.classList.toggle('on');upclose();}}
-function pickAll(v){{document.querySelectorAll('.pick').forEach(b=>b.classList.toggle('on',v));\
-upclose();}}
-</script>"""
-        style = (
-            "<style>.pick{background:#2a2e37;color:#9aa1ae;border:2px solid "
-            "var(--c);border-radius:12px;padding:2px 10px;margin:2px;cursor:pointer}"
-            ".pick.on{background:var(--c);color:#fff}.picker{margin:6px 0 4px}.picker "
-            ".ctl{background:#3b4150;color:#fff;border:0;border-radius:6px;"
-            "padding:3px 10px;margin-right:6px;cursor:pointer}</style>"
-        )
-        return (
-            f"<p class='lede'>A slice of the real forest: up to {per_tree} random hits from every "
-            "cluster, plus every hit on their path up to the root, "
-            "laid out once on real distances, so near means similar and positions stay fixed as "
-            "you add clusters. Each line joins a hit to its parent, "
-            "the nearest denser hit; bigger dots are denser; stars are roots. Pick clusters "
-            "below to compare them; it starts with the two large clusters that touch most.</p>"
-            + style
-            + script
-            + (
-                "<div class='picker'><button class='ctl' onclick='pickAll(true)'>all</button>"
-                f"<button class='ctl' onclick='pickAll(false)'>none</button>{chips}</div>"
-            )
-            + embed(fig, "80vh", div_id="upclose")
-        )
+        picks = [TreePick(t, color(t), t in default) for t in order]
+        return UpClose(per_tree, picks, embed(fig, "80vh", div_id="upclose"))
 
     def forest_order(self) -> np.ndarray:
         f = self.space.forest
@@ -639,20 +399,11 @@ upclose();}}
                 stack.extend(sorted(children.get(node, []), key=lambda k: f.rho_[k]))
         return np.array(order)
 
-    def forest(self) -> str:
+    def forest(self) -> dict[str, Any]:
         f = self.space.forest
         counts = np.asarray(self.space.counts)
         point_cluster = np.asarray(self.space.membership.probabilities_).argmax(1)
         n_roots = len(f.roots_)
-        out = section(
-            "3",
-            "Density-peak forest",
-            "Every point has a density rho (from the distance to its 5th neighbour) and a delta "
-            "(distance to the nearest denser point). "
-            f"Roots are the points above both elbow cuts, rho &ge; <b>{f.rho_cut_:.3f}</b> and "
-            f"delta &ge; <b>{f.delta_cut_:.3f}</b>: "
-            f"dense, and far from anything denser. This gives <b>{n_roots}</b> roots.",
-        )
         dg = go.Figure()
         dg.add_trace(
             go.Scattergl(
@@ -740,37 +491,18 @@ upclose();}}
         land.update_layout(
             legend=dict(itemclick="toggleothers", itemdoubleclick="toggle", font=dict(size=11))
         )
-        return out + self.tabs(
-            "forest",
-            {
-                "Decision graph": "<p class='lede'>Each dot is a hit, coloured by the tree "
-                "it ends up in. Right means a crowded neighbourhood; up means it must travel far "
-                "to reach anything denser. "
-                "Most hits sit low: a denser hit is close by, so they are on the slope of some "
-                "hill. Hilltops are both crowded and far from anything denser, "
-                "so they land in the top-right corner, past both cut lines. High dots on the "
-                "left are loners, not centres.</p>" + embed(dg, "70vh"),
-                "Peak separation": self.peak_separation(),
-                "Forest up close": self.forest_up_close(),
-                "Forest landscape": "<p class='lede'>Each tree drawn as a hill: height is density, "
-                "lines are parent links, the root sits on top. "
-                "The horizontal position is only the order of points along their tree, not a "
-                "distance; read this chart for depth and density. "
-                "Click a cluster in the legend to isolate it, double-click others to add them.</p>"
-                + embed(land, "75vh"),
-            },
-        )
+        return {
+            "rho_cut": f.rho_cut_,
+            "delta_cut": f.delta_cut_,
+            "n_roots": n_roots,
+            "decision": embed(dg, "70vh"),
+            "separation": self.peak_separation(),
+            "up_close": self.forest_up_close(),
+            "landscape": embed(land, "75vh"),
+        }
 
-    def membership(self) -> str:
+    def membership(self) -> dict[str, Any]:
         moved = int((self.cluster != np.asarray(self.space.tree)).sum())
-        out = section(
-            "4",
-            "Soft membership",
-            f"Probabilities come from graph distance to each cluster's peak. <b>{moved:,}</b> "
-            "hits are most probable in a different "
-            "cluster than the tree they grew in; from here on a hit's cluster is its most "
-            "probable one. Hits under 0.5 bits of entropy are confident.",
-        )
         hist = go.Figure(go.Histogram(x=self.entropy, nbinsx=80, marker_color="#7e57c2"))
         hist.add_vline(
             x=0.5, line=dict(color="#ffd600", dash="dash"), annotation_text="confident below"
@@ -797,16 +529,7 @@ upclose();}}
         )
         heat.update_yaxes(autorange="reversed", title="cluster")
         heat.update_xaxes(title="neighbour cluster")
-        return out + self.tabs(
-            "member",
-            {
-                "Entropy": embed(hist, "45vh"),
-                "Which clusters touch": "<p class='lede'>Row = cluster, column = neighbour. "
-                "Each cell is the share of the cluster's mutual-neighbour edges that land in the "
-                "neighbour. "
-                "The diagonal is how self-contained a cluster is.</p>" + embed(heat, "80vh"),
-            },
-        )
+        return {"moved": moved, "entropy": embed(hist, "45vh"), "touching": embed(heat, "80vh")}
 
     def hover(self, hit: int) -> str:
         p = self.probs[hit]
@@ -886,60 +609,34 @@ upclose();}}
         )
         return fig
 
-    def maps(self, positions: Positions) -> str:
-        out = section(
-            "5",
-            "Map of the hit space",
-            "Hits sampled from every bucket plus each cluster's root, laid out on their real "
-            "distances with a pull toward likely clusters' peaks. "
-            "Click a legend entry to isolate it. Switch to <b>By class</b> to see which inputs "
-            "each region comes from.",
-        )
-        panes = {"By cluster": embed(self.map_figure(positions, "cluster"), "85vh")}
+    def maps(self, positions: Positions) -> list[tuple[str, Markup]]:
+        panes = [("By cluster", embed(self.map_figure(positions, "cluster"), "85vh"))]
         if self.groups is not None:
-            panes["By class"] = embed(self.map_figure(positions, "group"), "85vh")
-        return out + self.tabs("map", panes)
+            panes.append(("By class", embed(self.map_figure(positions, "group"), "85vh")))
+        return panes
 
-    def composition_bar(self, members: np.ndarray) -> str:
+    def composition(self, members: np.ndarray) -> list[Part]:
         if self.groups is None or not len(members):
-            return ""
+            return []
         names, counts = np.unique(self.groups[members], return_counts=True)
         share = counts / counts.sum()
-        segments = "".join(
-            f"<div title='{n} {s:.0%}' "
-            f"style='width:{s * 100:.1f}%;background:{self.group_color(n)}'></div>"
-            for n, s in zip(names, share)
-        )
-        legend = "".join(
-            f"<span><i style='background:{self.group_color(n)}'></i>{n} {s:.0%}</span>"
-            for n, s in sorted(zip(names, share), key=lambda t: -t[1])
-        )
-        return f"<div><div class='bar'>{segments}</div><div class='legend'>{legend}</div></div>"
+        return [Part(str(n), float(s), self.group_color(str(n))) for n, s in zip(names, share)]
 
-    def strips(self, hits: list[int], caption: str) -> str:
-        tiles = [self.tile(h) for h in hits]
-        ids = [html.escape(self.space.hit_ids[h]) for h in hits]
-        images = "".join(
-            f"<img loading='lazy' src='{t.image}' title='{i}'>" for t, i in zip(tiles, ids)
-        )
-        overlays = "".join(
-            f"<img loading='lazy' src='{t.overlay}' title='{html.escape(t.label)} | act "
-            f"{self.activation[h]:.4g}'>"
-            for t, h in zip(tiles, hits)
-        )
-        patterns = "".join(
-            f"<img loading='lazy' src='{self.pattern(h)}' style='image-rendering:pixelated' "
-            f"title='{i}'>"
-            for h, i in zip(hits, ids)
-        )
-        return (
-            f"<div class='label'>{caption}</div><div class='strip'>{images}</div>"
-            "<div class='label'>DeepLift: which pixels drove each hit (yellow up, blue "
-            f"down)</div><div class='strip'>{overlays}</div>"
-            "<details class='patterns'><summary>Hit vectors: contribution of each upstream "
-            "channel</summary>"
-            f"<div class='strip'>{patterns}</div></details>"
-        )
+    def hit_views(self, hits: list[int]) -> list[HitView]:
+        views: list[HitView] = []
+        for h in hits:
+            t = self.tile(h)
+            views.append(
+                HitView(
+                    self.space.hit_ids[h],
+                    t.image,
+                    t.overlay,
+                    t.label,
+                    float(self.activation[h]),
+                    self.pattern(h),
+                )
+            )
+        return views
 
     def hits_to_render(self, buckets: list[Bucket]) -> list[int]:
         wanted: set[int] = set()
@@ -965,122 +662,71 @@ upclose();}}
                     break
         return picked
 
-    def cluster_card(self, c: int, bucket_links: BucketLinks) -> str:
+    def cluster_card(self, c: int, bucket_links: BucketLinks) -> ClusterCard:
         members = np.flatnonzero(self.cluster == c)
-        sources = len({source_of(self.space.hit_ids[h]) for h in members})
         acts = self.activation[members]
-        confident = (self.entropy[members] < 0.5).mean()
-        inside = self.contacts[c, c] / max(self.contacts[c].sum(), 1)
-        touches = "".join(
-            f"{self.chip(k)}<span style='margin-right:8px'>{s:.0%}</span>"
-            for k, s in self.neighbours(c)
-        )
-        links = " ".join(f"<a href='{href}'>{label}</a>" for label, href in bucket_links.get(c, []))
-        meta = (
-            f"<div class='meta'><span>activation <b>{acts.min():.3g} to {acts.max():.3g}</b>, "
-            f"median {np.median(acts):.3g}</span>"
-            f"<span>confident <b>{confident:.0%}</b></span>"
-            f"<span>self-contained <b>{inside:.0%}</b></span>"
-            f"<span>nearest clusters {touches or 'none'}</span>"
-            f"<span>mean hit vector <img src='{self.cluster_pattern(c)}' "
-            "style='height:66px;vertical-align:middle;image-rendering:pixelated;border-radius:3px"
-            "'></span>"
-            f"<span>bucket pages {links or 'none'}</span></div>"
-        )
-        return (
-            f"<section class='card' id='cluster-{c}' style='--c:{color(c)}'><header><h3>Cluster "
-            f"{c}</h3>"
-            f"<span>n={len(members):,} &middot; {sources:,} distinct "
-            f"inputs</span>{self.composition_bar(members)}</header>"
-            "<div "
-            f"class='body'>{meta}"
-            f"{self.strips(self.core_hits(c), 'Most confident hits, one per input')}</div></sectio"
-            "n>"
+        return ClusterCard(
+            cluster=ref(c),
+            size=len(members),
+            sources=len({source_of(self.space.hit_ids[h]) for h in members}),
+            composition=self.composition(members),
+            low=float(acts.min()),
+            high=float(acts.max()),
+            median=float(np.median(acts)),
+            confident=float((self.entropy[members] < 0.5).mean()),
+            self_contained=float(self.contacts[c, c] / max(self.contacts[c].sum(), 1)),
+            neighbours=[(ref(k), float(s)) for k, s in self.neighbours(c)],
+            pattern=self.cluster_pattern(c),
+            bucket_links=bucket_links.get(c, []),
+            hits=self.hit_views(self.core_hits(c)),
         )
 
-    def clusters(self, bucket_links: BucketLinks) -> str:
-        out = section(
-            "6",
-            "Clusters",
-            "One card per cluster, largest first. The rows show the hits most confidently in the "
-            "cluster, one per input, "
-            "their DeepLift maps, and their hit vectors. The bar in the header shows which "
-            "classes the cluster's hits come from.",
-        )
+    def cluster_cards(self, bucket_links: BucketLinks) -> list[ClusterCard]:
         order = [int(c) for c in np.argsort(-self.sizes, kind="stable") if self.sizes[c]]
-        return out + "".join(self.cluster_card(c, bucket_links) for c in order)
+        return [self.cluster_card(c, bucket_links) for c in order]
 
-    def group_card(self, b: Bucket, href: str) -> str:
-        hits = [int(h) for h in ranked_sample(b, self.probs, 10)]
-        gradient = ", ".join(color(c) for c in b.clusters)
-        return (
-            f"<section class='card' style='--c:{color(b.clusters[0])}'><header "
-            f"style='background:linear-gradient(90deg,{gradient})'>"
-            f"<h3>{html.escape(b.name)}</h3><span>n={len(b.hits):,}</span>"
-            f"{self.composition_bar(np.asarray(b.hits))}"
-            f"<a href='{href}' style='color:#fff;margin-left:auto'>open page &rarr;</a></header>"
-            "<div class='body'><div class='meta'><span>clusters "
-            f"{''.join(self.chip(c) for c in b.clusters)}</span></div>"
-            f"{
-                self.strips(
-                    hits, 'Hits ordered from the most to the least probable in the leading cluster'
-                )
-            }</div></section>"
+    def group_card(self, b: Bucket, href: str) -> GroupCard:
+        return GroupCard(
+            name=b.name,
+            href=href,
+            size=len(b.hits),
+            clusters=[ref(c) for c in b.clusters],
+            composition=self.composition(np.asarray(b.hits)),
+            hits=self.hit_views([int(h) for h in ranked_sample(b, self.probs, 10)]),
         )
-
-    def groups_section(self, sets: list[tuple[Bucket, str]]) -> str:
-        out = section(
-            "7",
-            "Group clusters",
-            "Hits that need the same set of clusters to cover 85% of their probability: the "
-            "borders between clusters. "
-            "Each row runs from hits leaning to the leading cluster to hits leaning away from it.",
-        )
-        return out + ("".join(self.group_card(b, href) for b, href in sets) or "<p>none</p>")
 
     def bucket_page(self, b: Bucket, positions: Positions, href: str) -> None:
         stars = [int(h) for h in ranked_sample(b, self.probs, 8)]
         shown = [int(h) for h in ranked_sample(b, self.probs, 6)]
-        tiles = []
+        tiles: list[TileView] = []
         for i, h in enumerate(shown):
             t = self.tile(h)
             p = self.probs[h]
-            bars = "".join(
-                f"<div><span style='width:34px'>c{c}</span><div class='fill' "
-                f"style='width:{p[c] * 160:.0f}px;background:{color(c)}'></div>{p[c]:.2f}</div>"
-                for c in np.argsort(-p)[:3]
-            )
             tiles.append(
-                f"<div class='tile'><div><span class='num'>#{i + 1}</span> {html.escape(t.label)} "
-                f"&middot; act {self.activation[h]:.4g} &middot; entropy "
-                f"{self.entropy[h]:.2f}</div>"
-                "<div class='id' "
-                f"title='{html.escape(self.space.hit_ids[h])}'>"
-                f"{html.escape(self.space.hit_ids[h])}</div>"
-                f"<div class='pair'><img src='{t.image}' title='input'><img src='{t.overlay}' "
-                "title='DeepLift'></div>"
-                f"<img class='pattern' src='{self.pattern(h)}' title='hit vector'><div "
-                f"class='probs'>{bars}</div></div>"
+                TileView(
+                    number=i + 1,
+                    id=self.space.hit_ids[h],
+                    image=t.image,
+                    overlay=t.overlay,
+                    label=t.label,
+                    activation=float(self.activation[h]),
+                    entropy=float(self.entropy[h]),
+                    pattern=self.pattern(h),
+                    probabilities=[(ref(c), float(p[c])) for c in np.argsort(-p)[:3]],
+                )
             )
-        rule = (
-            f"probability &ge; {b.threshold}"
-            if len(b.clusters) == 1
-            else f"these clusters cover {b.threshold:.0%} of probability"
+        page = render(
+            "bucket.html.j2",
+            name=b.name,
+            clusters=[ref(c) for c in b.clusters],
+            size=len(b.hits),
+            single=len(b.clusters) == 1,
+            threshold=b.threshold,
+            composition=self.composition(np.asarray(b.hits)),
+            map=embed(self.map_figure(positions, "cluster", stars, shown), "80vh"),
+            tiles=tiles,
         )
-        body = (
-            f"<p><a href='index.html'>&larr; back to report</a></p><h1>{html.escape(b.name)}</h1>"
-            "<div class='meta'><span>clusters "
-            f"{''.join(self.chip(c, 'index.html') for c in b.clusters)}</span>"
-            f"<span><b>{len(b.hits):,}</b> hits, "
-            f"{rule}</span>{self.composition_bar(np.asarray(b.hits))}</div>"
-            "<p class='lede'>Stars: 8 hits sampled at evenly spaced ranks of the leading "
-            "cluster's probability. "
-            "The 6 numbered ones are shown below with input, DeepLift, hit vector and top "
-            "cluster probabilities.</p>"
-            + embed(self.map_figure(positions, "cluster", stars, shown), "80vh")
-            + f"<div class='grid'>{''.join(tiles)}</div>"
-        )
-        (self.out / href).write_text(page(b.name, body))
+        (self.out / href).write_text(page)
 
     def write(
         self, out: Path, buckets: list[Bucket], positions: dict[int, tuple[float, float]]
@@ -1096,30 +742,21 @@ upclose();}}
             used.add(name)
             hrefs[id(b)] = f"{name}.html"
             self.bucket_page(b, positions, hrefs[id(b)])
-        bucket_links: dict[int, list[tuple[str, str]]] = {}
+        bucket_links: BucketLinks = {}
         for b in buckets:
             if len(b.clusters) == 1:
-                bucket_links.setdefault(b.clusters[0], []).append(
-                    (f"&ge;{b.threshold}", hrefs[id(b)])
-                )
-        sets = [(b, hrefs[id(b)]) for b in buckets if len(b.clusters) > 1]
-        table = "".join(
-            "<tr><td><a "
-            f"href='{hrefs[id(b)]}'>{html.escape(b.name)}</a></td><td>{len(b.hits):,}</td></tr>"
-            for b in buckets
+                bucket_links.setdefault(b.clusters[0], []).append((b.threshold, hrefs[id(b)]))
+        page = render(
+            "index.html.j2",
+            unit=self.unit,
+            stats=self.header_stats(),
+            activations=self.activations() if self.all_activations is not None else None,
+            hit_ranges=self.hit_ranges(),
+            forest=self.forest(),
+            membership=self.membership(),
+            maps=self.maps(positions),
+            cluster_cards=self.cluster_cards(bucket_links),
+            group_cards=[self.group_card(b, hrefs[id(b)]) for b in buckets if len(b.clusters) > 1],
+            buckets=[{"name": b.name, "href": hrefs[id(b)], "size": len(b.hits)} for b in buckets],
         )
-        body = (
-            self.header()
-            + (self.activations() if self.all_activations is not None else "")
-            + self.hit_ranges()
-            + self.forest()
-            + self.membership()
-            + self.maps(positions)
-            + self.clusters(bucket_links)
-            + self.groups_section(sets)
-            + section(
-                "8", "All buckets", "Every bucket with at least 10 hits, each with its own page."
-            )
-            + f"<table><tr><th>bucket</th><th>hits</th></tr>{table}</table>"
-        )
-        (self.out / "index.html").write_text(page(f"{self.unit} report", body))
+        (self.out / "index.html").write_text(page)

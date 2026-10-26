@@ -1,0 +1,55 @@
+<h1>{{ unit }}</h1>
+<div class="stats">
+  {% for value, name in stats %}
+  <div class="stat"><b>{{ value }}</b><span>{{ name }}</span></div>
+  {% endfor %}
+</div>
+<details class="guide">
+  <summary>How to read this report</summary>
+  <dl>
+    <dt>Hit</dt>
+    <dd>
+      A position where the unit fires strongly: an image patch for a vision unit, a token for a
+      text unit. Hits are the positive activations past the elbow of the sorted curve (section 1).
+    </dd>
+    <dt>Hit vector</dt>
+    <dd>
+      The exact contribution of every upstream channel to one hit: upstream activation times the
+      unit's weight for that channel. It sums to the unit's pre-activation minus its bias. Drawn as
+      a grid of channels: green pushes the unit up, red pushes it down.
+    </dd>
+    <dt>Distance</dt>
+    <dd>
+      Weighted Jaccard between hit vectors, positive and negative parts compared separately. 0 means
+      the same channels drove both hits in the same amounts, 1 means no channel in common.
+    </dd>
+    <dt>Forest and clusters</dt>
+    <dd>
+      Each hit links to its nearest denser hit. Hits that are both dense and far from anything
+      denser become roots, and every other hit climbs to one root. Each root's tree is a cluster
+      (section 3).
+    </dd>
+    <dt>Probability and entropy</dt>
+    <dd>
+      Each hit gets a probability for every cluster from its graph distance to that cluster's peak.
+      A hit's cluster is its most probable one. Entropy in bits says how split it is; under 0.5 is
+      confident.
+    </dd>
+    <dt>Map</dt>
+    <dd>
+      Hits laid out by a spring layout on their real distances, with an extra pull toward the peaks
+      of the clusters they likely belong to. Nothing is projected: a hit between two clusters sits
+      between their peaks.
+    </dd>
+    <dt>DeepLift</dt>
+    <dd>
+      Which input pixels drove this hit, against a black baseline. Yellow raises the unit, blue
+      lowers it. The box marks the hit's position.
+    </dd>
+    <dt>Group clusters</dt>
+    <dd>
+      Hits that need the same set of clusters to cover 85% of their probability: the borders
+      between clusters.
+    </dd>
+  </dl>
+</details>

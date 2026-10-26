@@ -1,0 +1,65 @@
+{% macro section(step, title) %}
+<h2><span class="step">{{ step }}</span>{{ title }}</h2>
+<p class="lede">{{ caller() }}</p>
+{% endmacro %}
+
+{% macro plot(figure) %}
+<div class="plot">{{ figure }}</div>
+{% endmacro %}
+
+{% macro tabs(group, panes) %}
+<div class="tabs">
+  {%- for name, _ in panes -%}
+  <button data-g="{{ group }}" data-n="{{ loop.index0 }}" class="{{ 'on' if loop.first }}" onclick="tab('{{ group }}','{{ loop.index0 }}')">{{ name }}</button>
+  {%- endfor %}
+</div>
+{% for _, body in panes %}
+<div data-g="{{ group }}" data-n="{{ loop.index0 }}" class="tabpane {{ 'on' if loop.first }}">
+  {{ body }}
+</div>
+{% endfor %}
+{% endmacro %}
+
+{% macro chip(cluster, prefix="") %}
+<a class="chip" href="{{ prefix }}#cluster-{{ cluster.id }}" style="background:{{ cluster.color }}">c{{ cluster.id }}</a>
+{%- endmacro %}
+
+{% macro composition_bar(composition) %}
+{% if composition %}
+<div>
+  <div class="bar">
+    {% for part in composition %}
+    <div title="{{ part.name }} {{ part.share|fmt('.0%') }}" style="width:{{ (part.share * 100)|fmt('.1f') }}%;background:{{ part.color }}"></div>
+    {% endfor %}
+  </div>
+  <div class="legend">
+    {% for part in composition|sort(attribute='share', reverse=true) %}
+    <span><i style="background:{{ part.color }}"></i>{{ part.name }} {{ part.share|fmt('.0%') }}</span>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro strips(caption, hits) %}
+<div class="label">{{ caption }}</div>
+<div class="strip">
+  {% for hit in hits %}
+  <img loading="lazy" src="{{ hit.image }}" title="{{ hit.id }}">
+  {% endfor %}
+</div>
+<div class="label">DeepLift: which pixels drove each hit (yellow up, blue down)</div>
+<div class="strip">
+  {% for hit in hits %}
+  <img loading="lazy" src="{{ hit.overlay }}" title="{{ hit.label }} | act {{ hit.activation|fmt('.4g') }}">
+  {% endfor %}
+</div>
+<details class="patterns">
+  <summary>Hit vectors: contribution of each upstream channel</summary>
+  <div class="strip">
+    {% for hit in hits %}
+    <img loading="lazy" class="vector" src="{{ hit.pattern }}" title="{{ hit.id }}">
+    {% endfor %}
+  </div>
+</details>
+{% endmacro %}
