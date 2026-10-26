@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gemma 3 270M embedding worlds</title>
+<style>
+:root { color-scheme: light dark;
+  --bg:#fff; --fg:#1a1a1a; --muted:#777; --line:#e3e3e3; --panel:#fafafa; --accent:#2a6fdb; }
+@media (prefers-color-scheme: dark) { :root {
+  --bg:#161616; --fg:#e6e6e6; --muted:#9a9a9a; --line:#333; --panel:#1e1e1e; --accent:#6ea0ff; } }
+body { background:var(--bg); color:var(--fg); margin:0 auto; max-width:1500px; padding:24px 20px 64px;
+  line-height:1.5; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
+h1 { font-size:1.5rem; margin:0 0 4px; }
+h2 { font-size:1.1rem; margin:40px 0 8px; }
+.meta { color:var(--muted); font-size:0.85rem; margin:0 0 16px; max-width:900px; }
+.controls { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:8px 0; font-size:0.85rem; }
+.controls input, .controls select { font:inherit; padding:3px 8px; background:var(--bg); color:var(--fg);
+  border:1px solid var(--line); border-radius:6px; }
+.map-row { display:flex; gap:14px; }
+#map { flex:1; height:760px; border:1px solid var(--line); border-radius:8px; }
+#panel { width:360px; height:760px; overflow:auto; border:1px solid var(--line); border-radius:8px;
+  background:var(--panel); padding:12px 14px; font-size:0.85rem; box-sizing:border-box; }
+#panel .tok-big { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:1.3rem; white-space:pre; }
+.label { color:var(--muted); font-size:0.65rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase;
+  margin:10px 0 3px; }
+.chip { display:inline-flex; align-items:baseline; gap:5px; padding:1px 8px; margin:2px 2px; font-size:0.8rem;
+  border:1px solid var(--line); border-radius:999px; background:var(--bg); cursor:pointer; }
+.chip code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre; }
+.chip .count { color:var(--muted); font-size:0.7rem; }
+.kv { display:grid; grid-template-columns:auto 1fr; gap:1px 10px; }
+.kv span:nth-child(odd) { color:var(--muted); }
+table { border-collapse:collapse; font-size:0.8rem; width:100%; }
+th, td { border-bottom:1px solid var(--line); padding:4px 6px; text-align:left; vertical-align:top; }
+th { cursor:pointer; position:sticky; top:0; background:var(--bg); }
+tr.tree-row:hover { background:var(--panel); cursor:pointer; }
+.grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.chart { height:340px; border:1px solid var(--line); border-radius:8px; }
+.flag { display:inline-block; font-size:0.65rem; padding:0 6px; border-radius:4px; margin-right:4px;
+  background:var(--line); }
+#tree-table-wrap { max-height:700px; overflow:auto; border:1px solid var(--line); border-radius:8px; }
+.path { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:0.8rem; margin:3px 0; }
+.path .arrow { color:var(--muted); }
+</style>
+<script>/*PLOTLY*/</script>
+</head>
+<body>
+<h1>Gemma 3 270M: worlds in the embedding space</h1>
+<p class="meta">Every kept token row of W_E (255,893 tokens, unused and special removed) is mean-centred and
+L2-normalised, so distance is cosine. The in-tfm density-peak forest (k=10, elbow root cuts) gives each token a density,
+a nearest denser parent and a tree. The map is in-tfm's bucket-graph layout: a sample with every tree's peak, joined by nearest neighbours in the real distance and pulled toward the peaks of the trees each point has probability for, then spring-laid out. Nothing is projected to two dimensions, and points outside the sample are not drawn. Hover a point for its neighbours in the full space and its chain of parents up to the
+tree's root. Click a point to pin it.</p>
+
+<h2>Real vs Gaussian null</h2>
+<div id="summary" class="kv" style="max-width:820px;font-size:0.85rem"></div>
+
+<h2>Map</h2>
+<div class="controls">
+  <label>Colour <select id="colour">
+    <option value="tree">tree</option>
+    <option value="tree_pct">density within tree (0 edge, 1 core)</option>
+    <option value="rho_pct">global density percentile</option>
+    <option value="lid">local intrinsic dim</option>
+    <option value="agree">neighbours in own tree</option>
+    <option value="log_freq">log10 WikiText frequency</option>
+    <option value="script">script</option>
+    <option value="flag4">undertrained</option>
+    <option value="flag16">boundary (most neighbours elsewhere)</option>
+    <option value="flag1">whole word</option>
+  </select></label>
+  <label>Find token <input id="search" placeholder="substring, or =exact" size="22"></label>
+  <span id="search-count" class="meta" style="margin:0"></span>
+  <button id="clear">clear highlight</button>
+</div>
+<div class="map-row"><div id="map"></div><div id="panel"><p class="meta">Hover a point.</p></div></div>
+
+<h2>Meaning from edge to core, within each tree</h2>
+<p class="meta">x is a token's density percentile inside its own tree, in deciles: 0 is the sparsest tenth (the
+edge), 9 the densest (the core). Trees with at least 20 tokens.</p>
+<div class="grid"><div id="c-within-meaning" class="chart"></div><div id="c-within-cont" class="chart"></div></div>
+
+<h2>Meaning against global density</h2>
+<p class="meta">Same, but against the density percentile over the whole vocabulary.</p>
+<div class="grid"><div id="c-global-meaning" class="chart"></div><div id="c-global-cont" class="chart"></div></div>
+
+<h2>Frequency control</h2>
+<p class="meta">Whole-word fraction and local intrinsic dim by within-tree decile, split by WikiText frequency.
+WikiText is English, so unseen tokens are mostly other scripts and rare pieces.</p>
+<div class="grid"><div id="c-band-word" class="chart"></div><div id="c-band-lid" class="chart"></div></div>
+
+<h2>Null model</h2>
+<p class="meta">Continuity measures on Gaussian points with the embedding covariance, against global density.</p>
+<div class="grid"><div id="c-null" class="chart"></div><div id="c-hub" class="chart"></div></div>
+
+<h2>Walking between two tokens of one tree</h2>
+<p class="meta">A great-circle walk of 16 steps between two tokens of the same tree. Gap is the mean distance from
+each interior step to its nearest token: small means the walk stays on tokens, large means it crosses empty space.
+Core pairs are both in the top 20% density of their tree, other pairs are any two tree members. Binned by the distance
+between the two ends, since longer walks have bigger gaps.</p>
+<div class="grid"><div id="c-paths" class="chart"></div><div id="examples" style="font-size:0.8rem"></div></div>
+
+<h2>Trees</h2>
+<p class="meta">Click a row to highlight the tree on the map. Core lists its densest tokens, edge its sparsest.</p>
+<div id="tree-table-wrap"><table id="tree-table"></table></div>
+
+<script type="application/json" id="data">/*DATA*/</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const decode = (s, T) => { const b = atob(s); const u = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new T(u.buffer); };
+const A = {};
+for (const [k, v] of Object.entries(D.arrays))
+  A[k] = decode(v, ['x','y','rho','rho_pct','tree_pct','lid','agree','log_freq'].includes(k) ? Float32Array : Int32Array);
+const N = D.tokens.length, K = A.neighbours.length / N;
+const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+const fg = dark ? '#e6e6e6' : '#1a1a1a', grid = dark ? '#333' : '#e3e3e3';
+const layoutBase = (title, x, y) => ({ title:{text:title, font:{size:13}}, paper_bgcolor:'rgba(0,0,0,0)',
+  plot_bgcolor:'rgba(0,0,0,0)', font:{color:fg, size:11}, margin:{l:50,r:10,t:36,b:40},
+  xaxis:{title:x, gridcolor:grid}, yaxis:{title:y, gridcolor:grid}, legend:{orientation:'h', y:-0.25} });
+
+const summary = document.getElementById('summary');
+for (const [k, v] of Object.entries(D.summary)) {
+  const a = document.createElement('span'); a.textContent = k;
+  const b = document.createElement('span'); b.textContent = v; summary.append(a, b);
+}
+
+const palette = ['#e6194b','#3cb44b','#4363d8','#f58231','#911eb4','#42d4f4','#f032e6','#bfef45','#fabed4','#469990',
+  '#dcbeff','#9a6324','#800000','#aaffc3','#808000','#ffd8b1','#000075','#a9a9a9','#ffe119','#00a6a6'];
+const hashColour = t => t < palette.length ? palette[t] : `hsl(${(t * 137.508) % 360},55%,${dark ? 60 : 45}%)`;
+
+function colours(mode) {
+  if (mode === 'tree') return { color: Array.from(A.tree, hashColour) };
+  if (mode === 'script') return { color: Array.from(A.script, s => hashColour(s)) };
+  if (mode.startsWith('flag')) { const bit = +mode.slice(4);
+    return { color: Array.from(A.flags, f => (f & bit) ? '#e6194b' : (dark ? '#444' : '#ccc')) }; }
+  return { color: Array.from(A[mode]), colorscale:'Viridis', showscale:true, colorbar:{thickness:10} };
+}
+
+const base = { type:'scattergl', mode:'markers', x:A.x, y:A.y, hoverinfo:'none',
+  marker:{ size:2.5, opacity:0.55, ...colours('tree') } };
+const highlight = { type:'scattergl', mode:'markers', x:[], y:[], hoverinfo:'none',
+  marker:{ size:7, color:'rgba(0,0,0,0)', line:{width:1.5, color:fg} } };
+const chain = { type:'scattergl', mode:'lines+markers', x:[], y:[], hoverinfo:'none',
+  line:{color:'#f58231', width:2}, marker:{size:6, color:'#f58231'} };
+const nbrs = { type:'scattergl', mode:'markers', x:[], y:[], hoverinfo:'none', marker:{size:7, color:'#42d4f4'} };
+const mapLayout = { ...layoutBase('', '', ''), showlegend:false, margin:{l:10,r:10,t:10,b:10},
+  xaxis:{visible:false}, yaxis:{visible:false}, dragmode:'pan', hovermode:'closest' };
+Plotly.newPlot('map', [base, highlight, chain, nbrs], mapLayout, {scrollZoom:true, displaylogo:false});
+const map = document.getElementById('map');
+
+document.getElementById('colour').onchange = e => {
+  const c = colours(e.target.value);
+  Plotly.restyle('map', { 'marker.color':[c.color], 'marker.colorscale':[c.colorscale || null],
+    'marker.showscale':[!!c.showscale] }, [0]);
+};
+
+function setHighlight(idx) {
+  Plotly.restyle('map', { x:[idx.map(i => A.x[i])], y:[idx.map(i => A.y[i])] }, [1]);
+}
+document.getElementById('search').oninput = e => {
+  const q = e.target.value; if (!q) { setHighlight([]); document.getElementById('search-count').textContent=''; return; }
+  const exact = q.startsWith('='), s = exact ? q.slice(1) : q.toLowerCase(), hit = [];
+  for (let i = 0; i < N; i++) {
+    const t = D.tokens[i];
+    if (exact ? (t === s || t === '␣' + s) : t.toLowerCase().includes(s)) hit.push(i);
+  }
+  document.getElementById('search-count').textContent = `${hit.length} tokens`;
+  setHighlight(hit.slice(0, 5000));
+};
+document.getElementById('clear').onclick = () => { setHighlight([]); document.getElementById('search').value=''; };
+
+const fmt = (v, d=3) => Number(v).toFixed(d);
+function chip(i, extra) {
+  const c = document.createElement('span'); c.className = 'chip';
+  const code = document.createElement('code'); code.textContent = D.tokens[i]; c.append(code);
+  if (extra !== undefined) { const s = document.createElement('span'); s.className='count'; s.textContent = extra; c.append(s); }
+  c.onclick = () => { pinned = i; show(i); };
+  return c;
+}
+function show(i) {
+  const p = document.getElementById('panel'); p.innerHTML = '';
+  const big = document.createElement('div'); big.className = 'tok-big'; big.textContent = D.tokens[i]; p.append(big);
+  const f = A.flags[i], flags = document.createElement('div');
+  [[1,'whole word'],[2,'WordNet'],[4,'undertrained'],[8,'byte'],[16,'boundary'],[32,'ROOT']].forEach(([b, n]) => {
+    if (f & b) { const s = document.createElement('span'); s.className='flag'; s.textContent=n; flags.append(s); } });
+  p.append(flags);
+  const t = A.tree[i], kv = document.createElement('div'); kv.className = 'kv'; kv.style.marginTop = '8px';
+  const root = D.roots[t];
+  [['tree', `${t} (root ${D.tokens[root]})`], ['density within tree', fmt(A.tree_pct[i], 2)],
+   ['global density pct', fmt(A.rho_pct[i], 3)], ['log density', fmt(A.rho[i])],
+   ['local intrinsic dim', fmt(A.lid[i], 1)], ['neighbours in own tree', fmt(A.agree[i], 2)],
+   ['nearest-neighbour of', `${A.k_occ[i]} tokens`], ['log10 freq', fmt(A.log_freq[i], 2)],
+   ['script', D.scripts[A.script[i]]]].forEach(([a, b]) => {
+    const x = document.createElement('span'); x.textContent = a; const y = document.createElement('span'); y.textContent = b; kv.append(x, y); });
+  p.append(kv);
+  const nl = document.createElement('div'); nl.className = 'label'; nl.textContent = `${K} nearest in full space`; p.append(nl);
+  const nn = []; for (let j = 0; j < K; j++) { const q = A.neighbours[i*K + j]; nn.push(q);
+    p.append(chip(q, A.tree[q] === t ? '' : `tree ${A.tree[q]}`)); }
+  const cl = document.createElement('div'); cl.className = 'label'; cl.textContent = 'parents up to the root'; p.append(cl);
+  const path = [i]; let c = i;
+  while (A.parent[c] >= 0 && A.tree[A.parent[c]] === t && path.length < 40 && c !== root) { c = A.parent[c]; path.push(c); }
+  path.slice(1).forEach(q => p.append(chip(q)));
+  Plotly.restyle('map', { x:[path.map(q => A.x[q]), nn.map(q => A.x[q])], y:[path.map(q => A.y[q]), nn.map(q => A.y[q])] }, [2, 3]);
+}
+let pinned = null;
+map.on('plotly_hover', e => { if (pinned === null && e.points[0].curveNumber === 0) show(e.points[0].pointIndex); });
+map.on('plotly_click', e => { const pt = e.points[0]; if (pt.curveNumber !== 0) return;
+  pinned = pinned === pt.pointIndex ? null : pt.pointIndex; show(pt.pointIndex); });
+
+const deciles = [...Array(10).keys()];
+function lines(id, title, series, ytitle, yrange) {
+  const traces = Object.entries(series).map(([name, ys]) => ({ x:deciles, y:ys, name, mode:'lines+markers', type:'scatter' }));
+  const l = layoutBase(title, 'decile (0 sparse, 9 dense)', ytitle); if (yrange) l.yaxis.range = yrange;
+  Plotly.newPlot(id, traces, l, {displaylogo:false, responsive:true});
+}
+const C = D.curves;
+lines('c-within-meaning', 'Meaning, within tree', C.within_meaning, 'fraction');
+lines('c-within-cont', 'Continuity, within tree', { ...C.within_continuity,
+  'local intrinsic dim (median)': C.within_continuity['local intrinsic dim (median)'].map(v => v / 100) }, 'value (LID / 100)');
+lines('c-global-meaning', 'Meaning, global density', C.global_meaning, 'fraction');
+lines('c-global-cont', 'Continuity, global density', { ...C.global_continuity,
+  'local intrinsic dim (median)': C.global_continuity['local intrinsic dim (median)'].map(v => v / 100) }, 'value (LID / 100)');
+lines('c-band-word', 'Whole-word fraction by frequency band', C.word_by_freq_band, 'fraction');
+lines('c-band-lid', 'Local intrinsic dim by frequency band', C.lid_by_freq_band, 'median LID');
+const nullSeries = {};
+for (const [k, v] of Object.entries(C.global_continuity)) if (k in C.null_global_continuity) {
+  const scale = k.startsWith('local') ? 1/100 : 1;
+  nullSeries['real: ' + k] = v.map(x => x * scale);
+  nullSeries['null: ' + k] = C.null_global_continuity[k].map(x => x * scale);
+}
+lines('c-null', 'Real vs null, global density', nullSeries, 'value (LID / 100)');
+const occ = Array.from(A.k_occ).sort((a, b) => b - a);
+Plotly.newPlot('c-hub', [{ y:occ.slice(0, 2000), type:'scatter', mode:'lines', name:'real' }],
+  { ...layoutBase('Hubness: how often a token is a 10-NN, top 2000', 'rank', 'times a neighbour'),
+    yaxis:{type:'log', gridcolor:grid} }, {displaylogo:false, responsive:true});
+
+const pb = D.path_bins;
+Plotly.newPlot('c-paths', ['core', 'halo'].map(k => ({ x:pb.map(r => r.range), y:pb.map(r => r[k]),
+  name: k === 'core' ? 'core pairs' : 'other pairs', type:'bar', text:pb.map(r => `n=${r[k + '_n']}`) })),
+  { ...layoutBase('Mean gap along the walk', 'distance between the two ends', 'gap'), barmode:'group' },
+  {displaylogo:false, responsive:true});
+const ex = document.getElementById('examples');
+D.examples.forEach(e => { const d = document.createElement('div'); d.className = 'path';
+  d.textContent = `[${e.kind === 'core' ? 'core' : 'other'} gap ${e.gap} end ${e.end}] ` + e.tokens.join('  →  '); ex.append(d); });
+
+const cols = [['tree','tree'],['size','size'],['root','root'],['script','main script'],['word','word'],
+  ['undertrained','undertr.'],['boundary','boundary'],['lid','LID'],['freq','log freq'],['core','core'],['edge','edge']];
+let sortKey = 'size', sortDir = -1;
+function renderTable() {
+  const tb = document.getElementById('tree-table'); tb.innerHTML = '';
+  const head = document.createElement('tr');
+  cols.forEach(([k, n]) => { const th = document.createElement('th'); th.textContent = n;
+    th.onclick = () => { sortDir = sortKey === k ? -sortDir : -1; sortKey = k; renderTable(); }; head.append(th); });
+  tb.append(head);
+  const rows = [...D.trees].sort((a, b) => (a[sortKey] > b[sortKey] ? 1 : a[sortKey] < b[sortKey] ? -1 : 0) * sortDir);
+  rows.forEach(r => { const tr = document.createElement('tr'); tr.className = 'tree-row';
+    cols.forEach(([k]) => { const td = document.createElement('td');
+      if (k === 'core' || k === 'edge') r[k].forEach(s => { const c = document.createElement('span'); c.className='chip';
+        const code = document.createElement('code'); code.textContent = s; c.append(code); td.append(c); });
+      else td.textContent = r[k];
+      tr.append(td); });
+    tr.onclick = () => { const idx = []; for (let i = 0; i < N; i++) if (A.tree[i] === r.tree) idx.push(i);
+      setHighlight(idx); map.scrollIntoView({behavior:'smooth'}); };
+    tb.append(tr); });
+}
+renderTable();
+</script>
+</body>
+</html>

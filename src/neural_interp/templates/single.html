@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gemma 3 270M: one embedding dimension's hits</title>
+<style>
+:root { color-scheme: light dark;
+  --bg:#fff; --fg:#1a1a1a; --muted:#777; --line:#e3e3e3; --panel:#fafafa; --mark:#ffe08a; }
+@media (prefers-color-scheme: dark) { :root {
+  --bg:#161616; --fg:#e6e6e6; --muted:#9a9a9a; --line:#333; --panel:#1e1e1e; --mark:#7a5d00; } }
+body { background:var(--bg); color:var(--fg); margin:0 auto; max-width:1500px; padding:24px 20px 64px;
+  line-height:1.5; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
+h1 { font-size:1.5rem; margin:0 0 4px; }
+h2 { font-size:1.1rem; margin:36px 0 8px; }
+.meta { color:var(--muted); font-size:0.85rem; margin:0 0 14px; max-width:900px; }
+.controls { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:8px 0; font-size:0.85rem; }
+.controls input, .controls select, .controls button { font:inherit; padding:3px 8px; background:var(--bg);
+  color:var(--fg); border:1px solid var(--line); border-radius:6px; }
+.map-row { display:flex; gap:14px; }
+#map { flex:1; height:760px; border:1px solid var(--line); border-radius:8px; }
+#panel { width:400px; height:760px; overflow:auto; border:1px solid var(--line); border-radius:8px;
+  background:var(--panel); padding:12px 14px; font-size:0.85rem; box-sizing:border-box; }
+.tok-big { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:1.3rem; white-space:pre; }
+.label { color:var(--muted); font-size:0.65rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase;
+  margin:10px 0 3px; }
+.chip { display:inline-flex; align-items:baseline; gap:5px; padding:1px 8px; margin:2px; font-size:0.8rem;
+  border:1px solid var(--line); border-radius:999px; background:var(--bg); cursor:pointer; }
+.chip code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre; }
+.chip .count { color:var(--muted); font-size:0.7rem; }
+.kv { display:grid; grid-template-columns:auto 1fr; gap:1px 10px; }
+.kv span:nth-child(odd) { color:var(--muted); }
+.ctx { font-size:0.8rem; margin:3px 0; padding:3px 6px; border-left:3px solid var(--line); }
+.ctx mark { background:var(--mark); color:inherit; padding:0 2px; border-radius:2px; }
+table { border-collapse:collapse; font-size:0.8rem; width:100%; }
+th, td { border-bottom:1px solid var(--line); padding:4px 6px; text-align:left; vertical-align:top; }
+th { cursor:pointer; position:sticky; top:0; background:var(--bg); }
+tr.tree-row:hover { background:var(--panel); cursor:pointer; }
+#tree-wrap { max-height:800px; overflow:auto; border:1px solid var(--line); border-radius:8px; }
+</style>
+<script>/*PLOTLY*/</script>
+</head>
+<body>
+<h1 id="title">Gemma 3 270M: one embedding dimension's hits</h1>
+<p class="meta" id="intro"></p>
+
+<h2>Map</h2>
+<div class="controls">
+  <label>Colour <select id="colour">
+    <option value="label">most probable cluster</option>
+    <option value="tree">tree</option>
+    <option value="value">value on the dimension</option>
+    <option value="tree_pct">density within tree (0 edge, 1 core)</option>
+    <option value="rho">log density</option>
+    <option value="agree">neighbours in own tree</option>
+  </select></label>
+  <label>Find token <input id="search" placeholder="substring, or =exact" size="22"></label>
+  <span id="search-count" class="meta" style="margin:0"></span>
+  <button id="clear">clear highlight</button>
+  <label>View cluster <select id="view"><option value="">all clusters</option></select></label>
+</div>
+<div class="map-row"><div id="map"></div><div id="panel"><p class="meta">Hover a point. Click to pin.</p></div></div>
+
+<h2>Hit selection</h2>
+<p class="meta" id="elbow-meta"></p>
+<div id="elbow" style="height:340px;border:1px solid var(--line);border-radius:8px"></div>
+
+<h2>Trees</h2>
+<p class="meta">One row per tree, largest first. Core lists its densest distinct tokens, edge its
+sparsest. Click a row, or use View cluster above the map, to show that cluster alone, zoomed, with its hits listed in the panel.</p>
+<div id="tree-wrap"><table id="tree-table"></table></div>
+
+<script type="application/json" id="data">/*DATA*/</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const P = D.distinct, N = P.token.length, O = D.occurrence;
+const occOf = Array.from({length:N}, () => []);
+O.distinct.forEach((d, h) => occOf[d].push(h));
+const nTrees = D.roots.length;
+const members = Array.from({length:nTrees}, () => []);
+P.tree.forEach((t, i) => members[t].push(i));
+members.forEach(m => m.sort((a, b) => P.rho[b] - P.rho[a]));
+document.getElementById('intro').textContent = D.intro;
+
+const dark = matchMedia('(prefers-color-scheme: dark)').matches, fg = dark ? '#e6e6e6' : '#1a1a1a';
+const palette = ['#e6194b','#3cb44b','#4363d8','#f58231','#911eb4','#42d4f4','#f032e6','#bfef45','#fabed4','#469990',
+  '#dcbeff','#9a6324','#800000','#aaffc3','#808000','#ffd8b1','#000075','#a9a9a9','#ffe119','#00a6a6'];
+const hashColour = t => t < palette.length ? palette[t] : `hsl(${(t * 137.508) % 360},55%,${dark ? 60 : 45}%)`;
+const colours = m => (m === 'tree' || m === 'label') ? { color:P[m].map(hashColour) }
+  : { color:P[m], colorscale:'Viridis', showscale:true, colorbar:{thickness:10} };
+Plotly.newPlot('map', [
+  { type:'scattergl', mode:'markers', x:P.x, y:P.y, hoverinfo:'none', marker:{ size:7, opacity:0.8, ...colours('label') } },
+  { type:'scattergl', mode:'markers', x:[], y:[], hoverinfo:'none', marker:{ size:10, color:'rgba(0,0,0,0)', line:{width:1.5, color:fg} } },
+  { type:'scattergl', mode:'lines+markers', x:[], y:[], hoverinfo:'none', line:{color:'#f58231', width:2}, marker:{size:7, color:'#f58231'} },
+  { type:'scattergl', mode:'markers', x:[], y:[], hoverinfo:'none', marker:{size:8, color:'#42d4f4'} },
+  { type:'scatter', mode:'markers+text', x:D.roots.map(r => P.x[r]), y:D.roots.map(r => P.y[r]),
+    text:D.roots.map((r, t) => String(t)), textfont:{size:10, color:'#111'}, hoverinfo:'none',
+    marker:{ size:20, color:D.roots.map((r, t) => hashColour(t)), line:{width:1.5, color:'#111'} } },
+], { paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', showlegend:false, margin:{l:10,r:10,t:10,b:10},
+  xaxis:{visible:false}, yaxis:{visible:false}, dragmode:'pan', hovermode:'closest', font:{color:fg} },
+  {scrollZoom:true, displaylogo:false});
+const map = document.getElementById('map');
+document.getElementById('colour').onchange = e => { const c = colours(e.target.value);
+  Plotly.restyle('map', { 'marker.color':[c.color], 'marker.colorscale':[c.colorscale || null], 'marker.showscale':[!!c.showscale] }, [0]); };
+const setHighlight = idx => Plotly.restyle('map', { x:[idx.map(i => P.x[i])], y:[idx.map(i => P.y[i])] }, [1]);
+document.getElementById('search').oninput = e => {
+  const q = e.target.value, out = document.getElementById('search-count');
+  if (!q) { setHighlight([]); out.textContent = ''; return; }
+  const exact = q.startsWith('='), s = exact ? q.slice(1) : q.toLowerCase(), hit = [];
+  P.token.forEach((t, i) => { if (exact ? (t === s || t === '␣' + s) : t.toLowerCase().includes(s)) hit.push(i); });
+  out.textContent = `${hit.length} tokens`; setHighlight(hit);
+};
+document.getElementById('clear').onclick = () => { setHighlight([]); document.getElementById('search').value = ''; };
+
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+let pinned = null;
+function chip(i, extra) {
+  const c = el('span', 'chip'); c.append(el('code', '', P.token[i]));
+  if (extra) c.append(el('span', 'count', extra));
+  c.onclick = () => { pinned = i; show(i); }; return c;
+}
+function context(h) {
+  const d = el('div', 'ctx'), [before, tok, after] = O.context[h];
+  d.append(document.createTextNode('…' + before)); d.append(el('mark', '', tok)); d.append(document.createTextNode(after + '…'));
+  d.title = `window ${O.window[h]}, position ${O.position[h]}`; return d;
+}
+function show(i) {
+  const p = document.getElementById('panel'); p.innerHTML = '';
+  p.append(el('div', 'tok-big', P.token[i]));
+  const t = P.tree[i], root = D.roots[t], kv = el('div', 'kv'); kv.style.marginTop = '8px';
+  [['value on the dimension', P.value[i]], ['most probable cluster', P.label[i]], ['tree', `${t} (root ${P.token[root]}, ${D.tree_hits[t]} hits)`],
+   ['density within tree', P.tree_pct[i].toFixed(2)], ['log density', P.rho[i].toFixed(3)], ['delta', P.delta[i].toFixed(3)],
+   ['depth below root', P.depth[i]], ['neighbours in own tree', P.agree[i].toFixed(2)]]
+    .forEach(([a, b]) => kv.append(el('span', '', a), el('span', '', String(b))));
+  p.append(kv);
+  p.append(el('div', 'label', 'nearest distinct points'));
+  P.neighbours[i].forEach(q => p.append(chip(q, P.tree[q] === t ? P.value[q].toFixed(3) : `tree ${P.tree[q]}`)));
+  p.append(el('div', 'label', 'parents up to the root'));
+  const path = [i]; let c = i;
+  while (P.parent[c] >= 0 && c !== root && path.length < 40) { c = P.parent[c]; path.push(c); }
+  path.slice(1).forEach(q => p.append(chip(q, P.value[q].toFixed(3))));
+  Plotly.restyle('map', { x:[path.map(q => P.x[q]), P.neighbours[i].map(q => P.x[q])],
+    y:[path.map(q => P.y[q]), P.neighbours[i].map(q => P.y[q])] }, [2, 3]);
+}
+function showTree(t) {
+  const p = document.getElementById('panel'); p.innerHTML = '';
+  p.append(el('div', 'tok-big', `cluster ${t}`));
+  const back = el('button', '', 'show all clusters'); back.onclick = () => { pinned = null; viewCluster(null); }; p.append(back);
+  p.append(el('div', 'meta', `${D.tree_hits[t]} occurrences, ${members[t].length} distinct, root ${P.token[D.roots[t]]}`));
+  p.append(el('div', 'label', 'tokens, densest first'));
+  members[t].forEach(q => p.append(chip(q, P.value[q].toFixed(3))));
+}
+map.on('plotly_hover', e => { if (pinned !== null) return; const pt = e.points[0];
+  if (pt.curveNumber === 0) show(pt.pointIndex); else if (pt.curveNumber === 4) show(D.roots[pt.pointIndex]); });
+map.on('plotly_click', e => { const pt = e.points[0]; if (pt.curveNumber !== 0) return;
+  pinned = pinned === pt.pointIndex ? null : pt.pointIndex; show(pt.pointIndex); });
+
+const E = D.elbow;
+document.getElementById('elbow-meta').textContent = `${E.n_positive.toLocaleString()} of ${E.n_tokens.toLocaleString()} tokens are on this side of zero. ` +
+  `The elbow of their sorted values keeps the top ${E.n_hits.toLocaleString()} as hits, down to ${E.cut}.`;
+Plotly.newPlot('elbow', [
+  { x:E.rank, y:E.value, type:'scatter', mode:'lines', name:'sorted value', line:{color:fg} },
+  { x:[E.n_hits - 1, E.n_hits - 1], y:[0, E.value[0]], type:'scatter', mode:'lines', name:`elbow: ${E.n_hits} hits`, line:{color:'#e6194b', dash:'dash'} }],
+  { paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', font:{color:fg, size:11}, margin:{l:55,r:10,t:10,b:40},
+    xaxis:{title:'rank (log)', type:'log'}, yaxis:{title:'value on the dimension'}, legend:{orientation:'h', y:-0.2} },
+  {displaylogo:false, responsive:true});
+
+const viewSelect = document.getElementById('view');
+members.forEach((m, t) => { const o = document.createElement('option'); o.value = t;
+  o.textContent = `cluster ${t}: ${m.length} hits, peak ${P.token[D.roots[t]]}`; viewSelect.append(o); });
+function viewCluster(t) {
+  viewSelect.value = t === null ? '' : String(t);
+  const keep = t === null ? null : new Set(members[t]);
+  const opacity = P.x.map((_, i) => keep === null || keep.has(i) ? 0.8 : 0.04);
+  const badgeOpacity = D.roots.map((_, c) => t === null || c === t ? 1 : 0.1);
+  Plotly.restyle('map', { 'marker.opacity':[opacity] }, [0]);
+  Plotly.restyle('map', { 'marker.opacity':[badgeOpacity], 'textfont.color':[D.roots.map((_, c) => t === null || c === t ? '#111' : 'rgba(0,0,0,0.1)')] }, [4]);
+  if (t === null) { Plotly.relayout('map', { 'xaxis.autorange':true, 'yaxis.autorange':true }); return; }
+  const xs = members[t].map(i => P.x[i]).filter(v => v !== null), ys = members[t].map(i => P.y[i]).filter(v => v !== null);
+  if (xs.length) { const pad = 0.05 + 0.1 * (Math.max(...xs) - Math.min(...xs) + Math.max(...ys) - Math.min(...ys));
+    Plotly.relayout('map', { 'xaxis.range':[Math.min(...xs) - pad, Math.max(...xs) + pad], 'yaxis.range':[Math.min(...ys) - pad, Math.max(...ys) + pad] }); }
+  pinned = -1; showTree(t);
+}
+viewSelect.onchange = e => { pinned = null; viewCluster(e.target.value === '' ? null : +e.target.value); };
+
+const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
+const rows = members.map((m, t) => ({ tree:t, hits:D.tree_hits[t], distinct:m.length, root:P.token[D.roots[t]],
+  agree:+(m.reduce((s, i) => s + P.agree[i], 0) / m.length).toFixed(2),
+  core:m.slice(0, 14), edge:m.slice(-8).reverse() }));
+const cols = [['tree','tree'],['hits','hits'],['distinct','distinct'],['root','root'],['agree','own-tree nbrs'],['core','core'],['edge','edge']];
+let sortKey = 'hits', sortDir = -1;
+function renderTable() {
+  const tb = document.getElementById('tree-table'); tb.innerHTML = '';
+  const head = el('tr');
+  cols.forEach(([k, n]) => { const th = el('th', '', n);
+    th.onclick = () => { sortDir = sortKey === k ? -sortDir : -1; sortKey = k; renderTable(); }; head.append(th); });
+  tb.append(head);
+  [...rows].sort((a, b) => (a[sortKey] > b[sortKey] ? 1 : a[sortKey] < b[sortKey] ? -1 : 0) * sortDir).forEach(r => {
+    const tr = el('tr', 'tree-row');
+    cols.forEach(([k]) => { const td = el('td');
+      if (k === 'core' || k === 'edge') r[k].forEach(i => td.append(chip(i, P.value[i].toFixed(3)))); else td.textContent = r[k];
+      tr.append(td); });
+    tr.onclick = e => { if (e.target.closest('.chip')) return; viewCluster(r.tree); map.scrollIntoView({behavior:'smooth'}); };
+    tb.append(tr);
+  });
+}
+renderTable();
+</script>
+</body>
+</html>
