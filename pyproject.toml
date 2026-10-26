@@ -7,13 +7,11 @@ requires-python = ">=3.12"
 dependencies = [
     "captum>=0.8",
     "networkx>=3.4",
-    "nltk>=3.9",
     "numpy>=2.0",
     "pillow>=11.0",
     "plotly>=5.20",
     "scipy>=1.13",
     "torch>=2.6",
-    "torch-lucent>=0.1.8",
 ]
 
 [build-system]
@@ -23,3 +21,15 @@ build-backend = "uv_build"
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
+include = ["src"]
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportUnknownLambdaType = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src"]
