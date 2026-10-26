@@ -1,10 +1,7 @@
 <div class="tile">
   <div><span class="num">#{{ tile.number }}</span> {{ tile.label }} &middot; act {{ tile.activation|fmt('.4g') }} &middot; entropy {{ tile.entropy|fmt('.2f') }}</div>
   <div class="id" title="{{ tile.id }}">{{ tile.id }}</div>
-  <div class="pair">
-    <img src="{{ tile.image }}" title="input">
-    <img src="{{ tile.overlay }}" title="DeepLift">
-  </div>
+  {{ tile.media }}
   <img class="pattern" src="{{ tile.pattern }}" title="hit vector">
   <div class="probs">
     {% for cluster, probability in tile.probabilities %}

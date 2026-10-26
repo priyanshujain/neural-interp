@@ -1,5 +1,5 @@
 {% from "macros.html.j2" import section, plot, tabs %}
-{% call section("1", "Activations and the elbow") %}
+{% call section(step, title) %}
   All {{ activations.total|fmt(',') }} activations of the unit, of which
   {{ activations.positive|fmt(',') }} are positive. Sorted from low to high, most sit in a long
   flat stretch and a few thousand shoot up at the end. The elbow is where the curve bends: draw a

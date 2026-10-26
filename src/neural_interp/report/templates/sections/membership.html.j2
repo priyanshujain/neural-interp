@@ -1,5 +1,5 @@
 {% from "macros.html.j2" import section, plot, tabs %}
-{% call section("4", "Soft membership") %}
+{% call section(step, title) %}
   Probabilities come from graph distance to each cluster's peak.
   <b>{{ membership.moved|fmt(',') }}</b> hits are most probable in a different cluster than the
   tree they grew in; from here on a hit's cluster is its most probable one. Hits under 0.5 bits of

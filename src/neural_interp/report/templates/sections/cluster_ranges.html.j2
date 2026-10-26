@@ -1,6 +1,6 @@
 {% from "macros.html.j2" import section, plot %}
-{% call section("2", "Activation range of each cluster") %}
+{% call section(step, title) %}
   Each box is a cluster, largest first. Clusters are not activation bands: strong and moderate
   hits share a cluster when the same channels drive them.
 {% endcall %}
-{{ plot(hit_ranges) }}
+{{ plot(cluster_ranges) }}

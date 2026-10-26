@@ -1,5 +1,5 @@
 {% from "macros.html.j2" import section, plot, tabs %}
-{% call section("3", "Density-peak forest") %}
+{% call section(step, title) %}
   Every point has a density rho (from the distance to its 5th neighbour) and a delta (distance to
   the nearest denser point). Roots are the points above both elbow cuts,
   rho &ge; <b>{{ forest.rho_cut|fmt('.3f') }}</b> and

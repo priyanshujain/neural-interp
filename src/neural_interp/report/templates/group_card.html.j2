@@ -10,6 +10,6 @@
     <div class="meta">
       <span>clusters {% for cluster in card.clusters %}{{ chip(cluster) }}{% endfor %}</span>
     </div>
-    {{ strips("Hits ordered from the most to the least probable in the leading cluster", card.hits) }}
+    {{ strips("Hits ordered from the most to the least probable in the leading cluster", card.strip, card.patterns) }}
   </div>
 </section>

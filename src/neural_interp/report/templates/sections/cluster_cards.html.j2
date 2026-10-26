@@ -1,5 +1,5 @@
 {% from "macros.html.j2" import section %}
-{% call section("6", "Clusters") %}
+{% call section(step, title) %}
   One card per cluster, largest first. The rows show the hits most confidently in the cluster, one
   per input, their DeepLift maps, and their hit vectors. The bar in the header shows which classes
   the cluster's hits come from.

@@ -2,14 +2,7 @@
 {% block title %}{{ unit }} report{% endblock %}
 {% block main %}
 {% include "sections/header.html.j2" %}
-{% if activations %}
-{% include "sections/activations.html.j2" %}
-{% endif %}
-{% include "sections/hit_ranges.html.j2" %}
-{% include "sections/forest.html.j2" %}
-{% include "sections/membership.html.j2" %}
-{% include "sections/maps.html.j2" %}
-{% include "sections/clusters.html.j2" %}
-{% include "sections/groups.html.j2" %}
-{% include "sections/buckets.html.j2" %}
+{% for body in sections %}
+{{ body }}
+{% endfor %}
 {% endblock %}

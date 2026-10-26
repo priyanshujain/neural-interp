@@ -1,5 +1,5 @@
 {% from "macros.html.j2" import section, plot, tabs %}
-{% call section("5", "Map of the hit space") %}
+{% call section(step, title) %}
   Hits sampled from every bucket plus each cluster's root, laid out on their real distances with
   a pull toward likely clusters' peaks. Click a legend entry to isolate it. Switch to
   <b>By class</b> to see which inputs each region comes from.

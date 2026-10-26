@@ -17,12 +17,8 @@ class Part:
 
 
 @dataclass(frozen=True)
-class HitView:
+class HitPattern:
     id: str
-    image: str
-    overlay: str
-    label: str
-    activation: float
     pattern: str
 
 
@@ -30,8 +26,7 @@ class HitView:
 class TileView:
     number: int
     id: str
-    image: str
-    overlay: str
+    media: Markup
     label: str
     activation: float
     entropy: float
@@ -53,7 +48,8 @@ class ClusterCard:
     neighbours: list[tuple[ClusterRef, float]]
     pattern: str
     bucket_links: list[tuple[float, str]]
-    hits: list[HitView]
+    strip: Markup
+    patterns: list[HitPattern]
 
 
 @dataclass(frozen=True)
@@ -63,7 +59,15 @@ class GroupCard:
     size: int
     clusters: list[ClusterRef]
     composition: list[Part]
-    hits: list[HitView]
+    strip: Markup
+    patterns: list[HitPattern]
+
+
+@dataclass(frozen=True)
+class BucketRow:
+    name: str
+    href: str
+    size: int
 
 
 @dataclass(frozen=True)

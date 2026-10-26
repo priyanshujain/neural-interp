@@ -1,0 +1,11 @@
+<div class="strip">
+  {% for id, tile, activation in cells %}
+  <img loading="lazy" src="{{ tile.image }}" title="{{ id }}">
+  {% endfor %}
+</div>
+<div class="label">DeepLift: which pixels drove each hit (yellow up, blue down)</div>
+<div class="strip">
+  {% for id, tile, activation in cells %}
+  <img loading="lazy" src="{{ tile.overlay }}" title="{{ tile.label }} | act {{ activation|fmt('.4g') }}">
+  {% endfor %}
+</div>
