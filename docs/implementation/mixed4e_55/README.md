@@ -30,6 +30,6 @@ Hit classes come from each image's ImageNet synset, grouped by WordNet into cat 
 
 A hit's cluster is its most probable cluster, for both runs. The largest clusters line up: a vehicle cluster of about 3,500 hits at 0.91 to 0.93 vehicle, a cat cluster of about 1,400 at 0.80 cat, a second vehicle cluster and a second cat cluster, and a mixed "other" cluster. Cat and vehicle hits never share a cluster. On the 13,341 hits both runs keep, the adjusted Rand index is 0.61. A CPU run of the same notebook gives 35 clusters: about a dozen roots sit just above the delta cut, so tiny numerical differences between devices move a couple of them across it.
 
-Report (maps, a page per bucket, DeepLift cards): <https://interp.pjay.in/mixed4e_55/same_images/report/index.html>. Comparison numbers: <https://interp.pjay.in/mixed4e_55/same_images/compare.json>.
+Report (maps, a page per bucket, DeepLift cards): <https://interp.pjay.in/public/mixed4e_55/same_images/report/index.html>. Comparison numbers: <https://interp.pjay.in/public/mixed4e_55/same_images/compare.json>.
 
 A fresh-sample run (different images from the same pool) has not been done yet.
