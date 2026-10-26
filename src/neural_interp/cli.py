@@ -1,39 +1,31 @@
 import argparse
-import importlib
+from pathlib import Path
 
-EXPERIMENTS = {
-    "embed": ("W_E rows, token ids and token features", ["out"], {}),
-    "freq": ("WikiText-103 token frequencies", ["out"], {}),
-    "forest": ("GPU density-peak forest on token rows", ["out"], {"mode": ["real", "null"]}),
-    "worlds-report": ("HTML report for the token-row forest", ["out", "html_path"], {}),
-    "occurrences": ("WikiText occurrences through W_E", ["out"], {}),
-    "dims": ("cluster the columns of W_E", ["out"], {}),
-    "single-dim": ("one dimension's elbow hits", ["dim", "sign", "out"], {"sign": ["pos", "neg"]}),
-    "render": ("HTML report from a saved JSON", ["template", "data_path", "html_path"], {"template": ["dims", "occ", "single"]}),
-}
+from neural_interp.experiments import compare, mixed4e_55
 
 
-def render(template, data_path, html_path):
-    from pathlib import Path
-
-    from neural_interp.lib.report import render as write
-
-    write(template, Path(data_path).read_text(), html_path)
-
-
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(prog="nint")
-    commands = parser.add_subparsers(dest="command", required=True)
-    for name, (help_text, args, choices) in EXPERIMENTS.items():
-        sub = commands.add_parser(name, help=help_text)
-        for arg in args:
-            sub.add_argument(arg, choices=choices.get(arg))
-    args = vars(parser.parse_args())
-    name = args.pop("command")
-    if name == "render":
-        return render(**args)
-    importlib.import_module(f"neural_interp.experiments.{name.replace('-', '_')}").run(**args)
-
-
-if __name__ == "__main__":
-    main()
+    sub = parser.add_subparsers(dest="command", required=True)
+    for name in ("collect", "report"):
+        p = sub.add_parser(name)
+        p.add_argument("--pool", type=Path, required=True)
+        p.add_argument("--out", type=Path, required=True)
+        p.add_argument("--n-images", type=int, default=2000)
+        p.add_argument("--image-list", type=Path)
+        p.add_argument("--seed", type=int, default=0)
+        p.add_argument("--selection", choices=["elbow", "bucketed"], default="elbow")
+        p.add_argument("--budget", type=int, default=14000)
+    p = sub.add_parser("compare")
+    p.add_argument("--ours", type=Path, required=True)
+    p.add_argument("--reference", type=Path, required=True)
+    p.add_argument("--out", type=Path, required=True)
+    args = parser.parse_args()
+    if args.command == "compare":
+        compare.compare(args.ours, args.reference, args.out)
+        return
+    cfg = mixed4e_55.Config(
+        pool=args.pool, out=args.out, n_images=args.n_images, image_list=args.image_list, seed=args.seed,
+        selection=args.selection, budget=args.budget,
+    )
+    getattr(mixed4e_55, args.command)(cfg)
