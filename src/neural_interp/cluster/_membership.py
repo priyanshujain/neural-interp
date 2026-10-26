@@ -4,7 +4,7 @@ import numpy as np
 from scipy.sparse.csgraph import dijkstra
 
 from neural_interp.cluster._forest import DensityPeakForest
-from neural_interp.cluster._graph import knn_graph, knn_indices
+from neural_interp.cluster._graph import knn_graph, nearest
 from neural_interp.typing import FloatArray, IntArray
 
 
@@ -35,8 +35,8 @@ class SoftMembership:
         geodesic = np.stack(
             [dijkstra(graph, directed=False, indices=p, min_only=True) for p in peaks], axis=1
         )
-        nearest = np.asarray(distances)[np.arange(len(distances)), knn_indices(distances, 1)[:, 0]]
-        temperature = float(np.median(nearest[np.isfinite(nearest) & (nearest > 0)]))
+        closest = nearest(distances, 1)[0][:, 0]
+        temperature = float(np.median(closest[np.isfinite(closest) & (closest > 0)]))
         logits = -geodesic / temperature
         finite = np.isfinite(logits)
         top = np.where(finite, logits, -np.inf).max(1, keepdims=True)

@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import numpy as np
 import torch
@@ -12,7 +12,7 @@ class _Unit(nn.Module):
     def __init__(self, model: nn.Module, module: str) -> None:
         super().__init__()
         self.model = model
-        self.index: tuple[int, ...] = ()
+        self.index: torch.Tensor | None = None
         self.output: torch.Tensor | None = None
         dict(model.named_modules())[module].register_forward_hook(self._grab)
 
@@ -23,8 +23,10 @@ class _Unit(nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         self.model(inputs)
-        assert self.output is not None
-        return self.output[(slice(None), *self.index)][:, None]
+        assert self.output is not None and self.index is not None
+        flat = self.output.reshape(len(self.output), -1)
+        index = self.index.repeat(len(flat) // len(self.index))
+        return flat.gather(1, index[:, None])
 
 
 class UnitDeepLift:
@@ -39,12 +41,17 @@ class UnitDeepLift:
         self.reduce = reduce
 
     def attribute(
-        self, inputs: torch.Tensor, baseline: torch.Tensor, index: tuple[int, ...]
+        self,
+        inputs: torch.Tensor,
+        baselines: torch.Tensor,
+        indices: Sequence[tuple[int, ...]],
+        output_shape: tuple[int, ...],
     ) -> FloatArray:
-        self.unit.index = index
+        flat = [int(np.ravel_multi_index(i, output_shape)) for i in indices]
+        self.unit.index = torch.tensor(flat, device=inputs.device)
         attribution = self.deeplift.attribute(
-            inputs.requires_grad_(True), baselines=baseline, target=0
+            inputs.requires_grad_(True), baselines=baselines, target=0
         )
         self.unit.output = None
-        result = attribution[0] if self.reduce is None else self.reduce(attribution[0])
+        result = attribution if self.reduce is None else self.reduce(attribution)
         return np.asarray(result.detach().cpu().numpy())

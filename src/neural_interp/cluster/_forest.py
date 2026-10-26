@@ -1,7 +1,10 @@
 from typing import Self
 
 import numpy as np
+import torch
 
+from neural_interp._device import default_device
+from neural_interp.cluster._graph import nearest
 from neural_interp.selection import elbow_index
 from neural_interp.typing import FloatArray, IntArray
 
@@ -11,17 +14,34 @@ class DensityPeakForest:
         self.n_neighbors = n_neighbors
 
     def log_density(self, distances: FloatArray, counts: IntArray) -> FloatArray:
-        radius = np.empty(len(distances))
-        for i in range(len(distances)):
-            row = np.asarray(distances[i])
-            order = np.argsort(row, kind="stable")
-            mass = counts[order].copy()
-            mass[order == i] -= 1
-            reached = int(np.searchsorted(np.cumsum(mass), self.n_neighbors))
-            radius[i] = row[order[min(reached, len(order) - 1)]]
+        values, indices = nearest(distances, self.n_neighbors + 1)
+        mass = counts[indices]
+        own = np.maximum(counts - 1, 0)
+        reached = np.argmax(own[:, None] + np.cumsum(mass, axis=1) >= self.n_neighbors, axis=1)
+        radius = np.where(own >= self.n_neighbors, 0.0, values[np.arange(len(values)), reached])
         positive = radius[radius > 0]
         offset = positive.min() / 2 if positive.size else 1.0
         return -np.log10(radius + offset)
+
+    def nearest_denser(
+        self, distances: FloatArray, rank: IntArray, chunk: int = 2048
+    ) -> tuple[IntArray, FloatArray]:
+        device = default_device()
+        n = len(distances)
+        ranks = torch.as_tensor(rank, device=device)
+        parent = np.full(n, -1, dtype=np.int64)
+        delta = np.full(n, np.inf)
+        for start in range(0, n, chunk):
+            block = torch.as_tensor(
+                np.array(distances[start : start + chunk]), device=device
+            ).float()
+            denser = ranks[None, :] < ranks[start : start + chunk, None]
+            masked = torch.where(denser, block, torch.full_like(block, torch.inf))
+            found = masked.min(dim=1)
+            delta[start : start + chunk] = found.values.cpu().numpy()
+            parent[start : start + chunk] = found.indices.cpu().numpy()
+        parent[~np.isfinite(delta)] = -1
+        return parent, delta
 
     def fit(self, distances: FloatArray, counts: IntArray | None = None) -> Self:
         n = len(distances)
@@ -31,14 +51,7 @@ class DensityPeakForest:
         rank = np.empty(n, dtype=np.int64)
         rank[rank_order] = np.arange(n)
 
-        parent = np.full(n, -1, dtype=np.int64)
-        delta = np.full(n, np.inf)
-        for i in range(n):
-            denser = rank < rank[i]
-            if denser.any():
-                candidates = np.where(denser, np.asarray(distances[i]), np.inf)
-                parent[i] = int(np.argmin(candidates))
-                delta[i] = candidates[parent[i]]
+        parent, delta = self.nearest_denser(distances, rank)
         finite = np.isfinite(delta)
         delta[~finite] = delta[finite].max() if finite.any() else 1.0
 

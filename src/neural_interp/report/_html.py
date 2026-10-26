@@ -492,7 +492,7 @@ class HitSpaceReport:
             "Grey bars are the best dense points that did not make it.</p>" + embed(fig, "60vh")
         )
 
-    def forest_up_close(self, per_tree: int = 100, seed: int = 0) -> str:
+    def forest_up_close(self, per_tree: int = 60, iterations: int = 150, seed: int = 0) -> str:
         f = self.space.forest
         point_mode = np.asarray(self.space.membership.probabilities_).argmax(1)
         n_trees = len(f.roots_)
@@ -517,7 +517,7 @@ class HitSpaceReport:
         for k, n in enumerate(nodes):
             if f.parent_[n] >= 0:
                 g.add_edge(k, index[int(f.parent_[n])], weight=2.0)
-        pos = nx.spring_layout(g, weight="weight", iterations=200, seed=seed)
+        pos = nx.spring_layout(g, weight="weight", iterations=iterations, seed=seed)
         xy = np.array([pos[k] for k in range(len(nodes))])
         rho = f.rho_[nodes]
         size = 4 + 14 * (rho - rho.min()) / max(np.ptp(rho), 1e-9)
@@ -940,6 +940,17 @@ upclose();}}
             "channel</summary>"
             f"<div class='strip'>{patterns}</div></details>"
         )
+
+    def hits_to_render(self, buckets: list[Bucket]) -> list[int]:
+        wanted: set[int] = set()
+        for c in range(self.n_clusters):
+            if self.sizes[c]:
+                wanted.update(self.core_hits(c))
+        for b in buckets:
+            wanted.update(int(h) for h in ranked_sample(b, self.probs, 6))
+            if len(b.clusters) > 1:
+                wanted.update(int(h) for h in ranked_sample(b, self.probs, 10))
+        return sorted(wanted)
 
     def core_hits(self, c: int, n: int = 10) -> list[int]:
         members = np.flatnonzero(self.cluster == c)
