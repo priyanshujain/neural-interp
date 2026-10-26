@@ -19,7 +19,6 @@ class Unit:
     upstream: str
 
 
-MIXED4E_55 = Unit(layer="mixed4e_1x1_pre_relu_conv", channel=55, upstream="mixed4d")
 
 
 def load_model(device: str) -> nn.Module:
@@ -139,3 +138,19 @@ class NeuronAttribution(nn.Module):
         attr = self.deeplift.attribute(inp, baselines=baseline, target=0)
         self.out = None
         return attr[0].sum(0).detach().cpu().numpy()
+
+
+def default_device() -> str:
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def hit_ids(paths: list[Path], root: Path, flat: np.ndarray, grid: tuple[int, int]) -> list[str]:
+    out = []
+    for h in flat:
+        image, pos = divmod(int(h), grid[0] * grid[1])
+        out.append(f"{paths[image].relative_to(root).as_posix()}:{pos}")
+    return out
