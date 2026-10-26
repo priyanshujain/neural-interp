@@ -2,7 +2,7 @@
 
 Definitions for the terms used in the thesis. Each one says what the term means here, which can be narrower than its general use. [Index](index.md)
 
-Definitions for the terms used in [in_tfm_neuron_clustering.md](in_tfm_neuron_clustering.md) and [gemma3_embedding_dims.md](gemma3_embedding_dims.md). Each one says what the term means here, which can be narrower than its general use.
+Definitions for the terms used in [in_tfm_neuron_clustering.md](../implementation/mixed4e_55/in_tfm_neuron_clustering.md) and the Gemma embedding experiments. Each one says what the term means here, which can be narrower than its general use.
 
 ## Models and units
 

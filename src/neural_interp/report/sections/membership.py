@@ -6,10 +6,19 @@ import plotly.graph_objects as go
 from neural_interp.report._context import ReportContext
 from neural_interp.report._render import embed
 from neural_interp.report._section import Section
+from neural_interp.report._views import GuideEntry
 
 
 class Membership(Section):
     title = "Soft membership"
+    guide = (
+        GuideEntry(
+            "Probability and entropy",
+            "Each hit gets a probability for every cluster from its graph distance to that "
+            "cluster's peak. A hit's cluster is its most probable one. Entropy in bits says how "
+            "split it is; under 0.5 is confident.",
+        ),
+    )
     template = "sections/membership.html.j2"
 
     def view(self, context: ReportContext) -> dict[str, Any]:

@@ -372,3 +372,10 @@ details.patterns summary {
   margin-right: 6px;
   cursor: pointer;
 }
+
+.guide dt .step {
+  margin-left: 8px;
+  color: #7b8191;
+  font-size: 13px;
+  font-weight: 400;
+}

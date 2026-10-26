@@ -5,7 +5,7 @@ import numpy as np
 from neural_interp.buckets import ranked_sample
 from neural_interp.report._context import LinkedBucket, ReportContext, ref, source_of
 from neural_interp.report._section import Section
-from neural_interp.report._views import ClusterCard, GroupCard
+from neural_interp.report._views import ClusterCard, GroupCard, GuideEntry
 
 
 def core_hits(context: ReportContext, cluster: int, n: int = 10) -> list[int]:
@@ -34,6 +34,14 @@ def neighbours(context: ReportContext, cluster: int, n: int = 5) -> list[tuple[i
 
 class ClusterCards(Section):
     title = "Clusters"
+    guide = (
+        GuideEntry(
+            "Hit vector",
+            "The exact contribution of every upstream input to one hit: input activation times the"
+            " unit's weight for it, summing to the pre-activation minus the bias. Drawn as a grid:"
+            " green pushes the unit up, red pushes it down.",
+        ),
+    )
     template = "sections/cluster_cards.html.j2"
 
     def shown(self, context: ReportContext) -> list[int]:
@@ -75,6 +83,13 @@ class ClusterCards(Section):
 
 class GroupCards(Section):
     title = "Group clusters"
+    guide = (
+        GuideEntry(
+            "Group clusters",
+            "Hits that need the same set of clusters to cover 85% of their probability: the "
+            "borders between clusters.",
+        ),
+    )
     template = "sections/group_cards.html.j2"
 
     def shown(self, context: ReportContext) -> list[LinkedBucket]:

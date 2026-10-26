@@ -71,4 +71,4 @@ An earlier dims report read the forest's internally sorted points in input order
 
 ## Artifacts
 
-Commands, reports and shared links: [../implementation/gemma3_embedding_dims.md](../implementation/gemma3_embedding_dims.md).
+Implementation notes move to `docs/implementation/` when this experiment is rerun on the current library.

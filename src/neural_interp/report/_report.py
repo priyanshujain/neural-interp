@@ -9,6 +9,7 @@ from neural_interp.report._context import Positions, ReportContext, link_buckets
 from neural_interp.report._hits import HitView, ImageHitView, Tile
 from neural_interp.report._render import render
 from neural_interp.report._section import Section
+from neural_interp.report._views import GuideItem
 from neural_interp.report.sections import (
     Activations,
     BucketPages,
@@ -90,8 +91,15 @@ class Report:
         for section in shown:
             section.write_assets(context)
         bodies: list[Markup] = [s.render(context, i + 1) for i, s in enumerate(shown)]
+        guide = [
+            GuideItem(e.term, e.text, i + 1, s.title) for i, s in enumerate(shown) for e in s.guide
+        ] + [GuideItem(e.term, e.text, None, "") for e in context.hit_view.guide()]
         page = render(
-            "index.html.j2", unit=context.unit, stats=self.header_stats(), sections=bodies
+            "index.html.j2",
+            unit=context.unit,
+            stats=self.header_stats(),
+            guide=guide,
+            sections=bodies,
         )
         (out / "index.html").write_text(page)
 

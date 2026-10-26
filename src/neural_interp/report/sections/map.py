@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 from neural_interp.report._context import Positions, ReportContext
 from neural_interp.report._render import color, embed
 from neural_interp.report._section import Section
+from neural_interp.report._views import GuideEntry
 
 
 def hover(context: ReportContext, hit: int) -> str:
@@ -94,6 +95,14 @@ def map_figure(
 
 class Map(Section):
     title = "Map of the hit space"
+    guide = (
+        GuideEntry(
+            "Map",
+            "Hits laid out by a spring layout on their real distances, with an extra pull toward "
+            "the peaks of the clusters they likely belong to. Nothing is projected: a hit between "
+            "two clusters sits between their peaks.",
+        ),
+    )
     template = "sections/map.html.j2"
 
     def view(self, context: ReportContext) -> dict[str, Any]:

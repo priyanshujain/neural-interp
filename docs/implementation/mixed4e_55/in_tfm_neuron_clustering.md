@@ -2,7 +2,7 @@
 
 Implementation notes for [the thesis](../../thesis/index.md).
 
-This doc explains, from the ground up, the method in Hariom's [narang99/in-tfm](https://github.com/narang99/in-tfm) repo and its result on the InceptionV1 neuron `mixed4e:55`. It assumes you know what a neural network is and roughly what a convolution does, and nothing else. [gemma3_embedding_dims.md](gemma3_embedding_dims.md) applies the same method to a language model. [glossary.md](../../thesis/glossary.md) is a short lookup table for every term defined here.
+This doc explains, from the ground up, the method in Hariom's [narang99/in-tfm](https://github.com/narang99/in-tfm) repo and its result on the InceptionV1 neuron `mixed4e:55`. It assumes you know what a neural network is and roughly what a convolution does, and nothing else. [glossary.md](../../thesis/glossary.md) is a short lookup table for every term defined here.
 
 ## The question
 
@@ -145,4 +145,4 @@ PRs 105 to 111 are merged. 113 to 118 are open and stacked: hit buckets (114), b
 
 ## Where this goes next
 
-Hariom proposed carrying the method into a language model by treating the 640 dimensions of Gemma 3's embedding matrix as units. [gemma3_embedding_dims.md](gemma3_embedding_dims.md) does that: it first checks that the dimensions are real units, then runs this pipeline on single dimensions as if each were mixed4e:55.
+Hariom proposed carrying the method into a language model by treating the 640 dimensions of Gemma 3's embedding matrix as units. That experiment first checks that the dimensions are real units, then runs this pipeline on single dimensions as if each were mixed4e:55. It is being rebuilt on this library and will get its own folder under `docs/implementation/`.

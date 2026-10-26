@@ -6,11 +6,19 @@ import plotly.graph_objects as go
 from neural_interp.report._context import ReportContext
 from neural_interp.report._render import embed
 from neural_interp.report._section import Section
+from neural_interp.report._views import GuideEntry
 from neural_interp.selection import elbow_index
 
 
 class Activations(Section):
     title = "Activations and the elbow"
+    guide = (
+        GuideEntry(
+            "Hit",
+            "An input position where the unit fires strongly. Hits are the positive activations "
+            "past the elbow of the sorted curve.",
+        ),
+    )
     template = "sections/activations.html.j2"
 
     def visible(self, context: ReportContext) -> bool:

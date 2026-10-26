@@ -5,6 +5,7 @@ import numpy as np
 from markupsafe import Markup
 
 from neural_interp.report._render import render
+from neural_interp.report._views import GuideEntry
 from neural_interp.space import HitSpace
 
 
@@ -16,6 +17,8 @@ class HitView(Protocol):
     def label(self, hit: int) -> str: ...
 
     def hover_extras(self, hit: int) -> str: ...
+
+    def guide(self) -> list[GuideEntry]: ...
 
 
 @dataclass
@@ -49,3 +52,17 @@ class ImageHitView:
 
     def hover_extras(self, hit: int) -> str:
         return ""
+
+    def guide(self) -> list[GuideEntry]:
+        return [
+            GuideEntry(
+                "Hit, for an image unit",
+                "One image patch: the unit's value at one position of its feature map. Cards show "
+                "the input with that position boxed.",
+            ),
+            GuideEntry(
+                "DeepLift",
+                "Which input pixels drove this hit, against a black baseline. Yellow raises the "
+                "unit, blue lowers it. The box marks the hit's position.",
+            ),
+        ]

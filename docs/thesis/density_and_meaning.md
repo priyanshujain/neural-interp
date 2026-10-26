@@ -49,4 +49,4 @@ Density predicts geometry but not meaning, and where density moves with anything
 
 ## Artifacts
 
-[../implementation/gemma3_token_rows.md](../implementation/gemma3_token_rows.md).
+Implementation notes move to `docs/implementation/` when this experiment is rerun on the current library.

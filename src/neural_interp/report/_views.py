@@ -82,3 +82,17 @@ class UpClose:
     per_tree: int
     picks: list[TreePick]
     figure: Markup
+
+
+@dataclass(frozen=True)
+class GuideEntry:
+    term: str
+    text: str
+
+
+@dataclass(frozen=True)
+class GuideItem:
+    term: str
+    text: str
+    step: int | None
+    title: str

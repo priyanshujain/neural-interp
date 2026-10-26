@@ -8,11 +8,25 @@ from markupsafe import Markup
 from neural_interp.report._context import ReportContext
 from neural_interp.report._render import color, embed
 from neural_interp.report._section import Section
-from neural_interp.report._views import TreePick, UpClose
+from neural_interp.report._views import GuideEntry, TreePick, UpClose
 
 
 class Forest(Section):
     title = "Density-peak forest"
+    guide = (
+        GuideEntry(
+            "Distance",
+            "Weighted Jaccard between hit vectors, positive and negative parts compared "
+            "separately. 0 means the same inputs drove both hits in the same amounts, 1 means no "
+            "input in common.",
+        ),
+        GuideEntry(
+            "Forest and clusters",
+            "Each hit links to its nearest denser hit. Hits that are both dense and far from "
+            "anything denser become roots, and every other hit climbs to one root. Each root's "
+            "tree is a cluster.",
+        ),
+    )
     template = "sections/forest.html.j2"
 
     def peak_separation(self, context: ReportContext) -> Markup:
